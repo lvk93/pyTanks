@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytanks"
+version = "0.1.0.dev0"
+description = "Battery models drawn as tanks, pipes and valves: the chargetanks.com picture language for PyBaMM."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Lars von Kolzenberg" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pybamm>=25.12",
+    "matplotlib>=3.8",
+    "numpy>=1.24",
+]
+keywords = ["battery", "lithium-ion", "pybamm", "visualization", "electrochemistry", "teaching"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff"]
+
+[project.urls]
+Homepage = "https://chargetanks.com"
+Source = "https://github.com/lvk93/pytanks"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytanks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E731", "E402", "B905"]

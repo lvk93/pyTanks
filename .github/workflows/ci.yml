@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            pybamm: "pybamm"            # latest release
+          - python: "3.12"
+            pybamm: "pybamm==26.9.*"    # previous release
+          - python: "3.10"
+            pybamm: "pybamm"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install "${{ matrix.pybamm }}" -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests examples
+      - name: Test
+        run: pytest -q
+      - name: Example figures
+        run: python examples/make_figures.py /tmp/figs
