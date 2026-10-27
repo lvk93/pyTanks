@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 from matplotlib.patches import Polygon
 
+from .style import color as token_color
 from .style import tokens
 
 
@@ -100,7 +101,7 @@ def water_polygon(p: TankProfile, cx: float, fill: float) -> np.ndarray | None:
     return np.array(right + left)
 
 
-def draw_tank(ax, p: TankProfile, cx: float, fill: float | None, color: str, *, rim: float = 0.04,
+def draw_tank(ax, p: TankProfile, cx: float, fill: float | None, color: str, *, rim: float = 0.0,
               lw: float | None = None, linestyle="-", alpha: float = 1.0, water: bool = True,
               zorder: float = 2):
     """Draw one tank centred at ``cx`` on an axis whose y is the potential (pointing down)."""
@@ -119,8 +120,8 @@ def draw_tank(ax, p: TankProfile, cx: float, fill: float | None, color: str, *, 
 
 
 def draw_ceiling(ax, x0: float, x1: float, *, label: str | None = "ceiling = Li/Li$^+$ (0 V)"):
-    c = tokens()["colors"]["ceiling"]
+    c = token_color("ceiling")
     ax.axhspan(-0.12, 0.0, xmin=0, xmax=1, color=c, alpha=0.5, lw=0, zorder=0)
     ax.axhline(0.0, color=c, lw=1.0, zorder=0.5)
     if label:
-        ax.text((x0 + x1) / 2, -0.17, label, ha="center", va="bottom", fontsize=7, color=tokens()["colors"]["muted"])
+        ax.text((x0 + x1) / 2, -0.17, label, ha="center", va="bottom", fontsize=7, color=token_color("muted"))

@@ -6,15 +6,18 @@ Picture language (chargetanks.com, kinetics chapter):
            water surface = mean lithiation of the slice (equilibrium level of the particle bulk).
 * notch  = equilibrium level at the particle *surface* (OCP of the surface concentration).
            Notch vs. water surface = how far solid diffusion lags behind ("sloshing").
-* marker = pipe level at that position: phi_s - phi_e, i.e. what a lithium reference electrode
-           sitting in the electrolyte there would read. Marker vs. notch = reaction overpotential.
-* arrow  = valve (charge transfer). Width ~ local interfacial current density. It always points
-           downhill: from the higher water level to the lower one.
-* pipe   = electrolyte below the tanks. Colour = salt concentration, thickness = effective
-           conductivity kappa(c_e) * transport efficiency.
+* riser  = standpipe next to each tank, rising from the electrolyte pipe. Its water level is
+           phi_s - phi_e there, i.e. what a lithium reference electrode sitting in the electrolyte
+           at that position would read. Riser level vs. notch = reaction overpotential.
+* arrow  = valve (charge transfer) between riser and particle surface. It shows where lithium
+           crosses the interface, in which direction, and how much: width ~ local interfacial
+           current density, slope = overpotential. It always runs downhill.
+* pipe   = electrolyte below the tanks. Shade = salt concentration (pale = drained),
+           thickness = effective conductivity kappa(c_e) * transport efficiency.
 
-The potential axis points down (depth below the Li/Li+ ceiling), as for the balance tanks. Each
-electrode panel is a zoom into a narrow potential band around its levels.
+The potential axis points down (depth below the Li/Li+ ceiling), as for the balance tanks. Anode
+and cathode get two windows on the *same* scale (mV per cm), with the axis broken in between, so
+the cathode hangs below the anode as in the balance picture.
 
 Everything comes from a PyBaMM solution; pytanks only averages it over slices and draws it.
 """
@@ -25,8 +28,9 @@ from dataclasses import dataclass, field
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import TwoSlopeNorm
-from matplotlib.patches import FancyArrowPatch, Rectangle
+from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch, Rectangle
 
 from . import _pybamm
 from .style import color, figsize, style_context, tokens
@@ -194,18 +198,18 @@ def ladder(sim_or_solution, t: float | None = None, *, parameter_values=None, n_
     )
 
 
-def potential_band(e: Electrode, *, min_span=None, margin=None) -> tuple[float, float]:
-    """Zoom band (low, high) in V around all levels of one electrode."""
+def potential_band(e: Electrode, *, span=None, min_span=None, margin=None) -> tuple[float, float]:
+    """Zoom window (low, high) in V around all levels of one electrode; ``span`` fixes its width."""
     g = tokens()["geometry"]
     min_span = g["zoom_min_span_V"] if min_span is None else min_span
     margin = g["zoom_margin"] if margin is None else margin
     lv = np.concatenate([e.u_water, e.u_notch, e.u_pipe])
     lo, hi = float(lv.min()), float(lv.max())
-    span = hi - lo
-    if span < min_span:
-        mid = (lo + hi) / 2
-        lo, hi, span = mid - min_span / 2, mid + min_span / 2, min_span
-    return lo - margin * span, hi + margin * span
+    width = max(hi - lo, min_span) * (1 + 2 * margin)
+    if span is not None:
+        width = max(width, span)
+    mid = (lo + hi) / 2
+    return mid - width / 2, mid + width / 2
 
 
 def tank_scale(e: Electrode, band) -> float:
@@ -221,19 +225,40 @@ def tank_scale(e: Electrode, band) -> float:
     return float(best)
 
 
+def riser_x(e: Electrode, i: int) -> float:
+    """Standpipe of slice i: on the slot boundary towards the separator."""
+    return float(e.centers[i] + e.separator_side * e.widths[i] / 2)
+
+
 def valve_geometry(e: Electrode, i: int, scale: float):
-    """(pipe point, notch point, lithium into particle?) for slice i, in data coordinates."""
+    """(riser point, notch point, lithium into particle?) for slice i, in data coordinates."""
     cx = e.centers[i]
     side = e.separator_side
-    x_pipe = cx + side * e.widths[i] / 2
+    rw = tokens()["geometry"]["riser_width"] * e.widths[i]
+    x_riser = riser_x(e, i) - side * rw / 2
     w = e.slice_profile(i).scaled(scale).width_at(e.u_notch[i])
     x_wall = cx + side * w / 2
     into = e.j[i] < 0
-    return (x_pipe, e.u_pipe[i]), (x_wall, e.u_notch[i]), into
+    return (x_riser, e.u_pipe[i]), (x_wall, e.u_notch[i]), into
 
 
-def draw_electrode(ax, e: Electrode, *, band=None, j_max=None, notch=True, valves=True, markers=True,
-                   water=True, show_zero=True):
+def salt_cmap():
+    """Pale (drained) to full water colour, blended into the current background."""
+    bg = np.array(to_rgb(color("background")))
+    water = np.array(to_rgb(color("water")))
+    return LinearSegmentedColormap.from_list("salt", [bg + 0.25 * (water - bg), water])
+
+
+def draw_riser(ax, x, width, level, bottom, face):
+    """Standpipe: water column from ``bottom`` up to ``level`` (potential axis points down)."""
+    ax.add_patch(Rectangle((x - width / 2, level), width, bottom - level, facecolor=face, lw=0, zorder=1.5))
+    for xx in (x - width / 2, x + width / 2):
+        ax.plot([xx, xx], [bottom, level - 0.02 * abs(bottom - level) - 1e-4], color=color("muted"), lw=0.5,
+                zorder=1.6)
+
+
+def draw_electrode(ax, e: Electrode, *, band=None, j_max=None, notch=True, valves=True, risers=True,
+                   water=True, show_zero=True, salt=None):
     """Draw one electrode as a row of slice tanks on ``ax`` (x = position [um], y = potential, down)."""
     tk = tokens()
     band = potential_band(e) if band is None else band
@@ -241,107 +266,138 @@ def draw_electrode(ax, e: Electrode, *, band=None, j_max=None, notch=True, valve
     edge_color = color("anode" if e.side == "negative" else "cathode")
     j_max = float(np.max(np.abs(e.j))) if j_max is None else j_max
     lw_min, lw_max = tk["linewidth"]["valve_min"], tk["linewidth"]["valve_max"]
+    cmap, norm = salt if salt is not None else (salt_cmap(), Normalize(0, max(e.c_e.max(), 1)))
+    rw = tk["geometry"]["riser_width"]
     for i, cx in enumerate(e.centers):
         p = e.slice_profile(i).scaled(scale)
-        draw_tank(ax, p, cx, e.fill[i] if water else None, edge_color, lw=1.1, rim=0)
+        draw_tank(ax, p, cx, e.fill[i] if water else None, edge_color, lw=tk["linewidth"]["tank"])
+        if risers:
+            draw_riser(ax, riser_x(e, i), rw * e.widths[i], e.u_pipe[i], band[1] + 1, cmap(norm(e.c_e[i])))
         if notch:
             w = p.width_at(e.u_notch[i])
             xn = cx + e.separator_side * w / 2
-            ax.plot(xn + e.separator_side * 0.03 * e.widths[i], e.u_notch[i],
-                    marker="<" if e.separator_side > 0 else ">", ms=4, color=color("ink"), mew=0, zorder=5)
-        if markers:
-            ax.plot(cx + e.separator_side * e.widths[i] / 2, e.u_pipe[i], marker="v", ms=4.5,
-                    color=color("navy"), mew=0, zorder=5, clip_on=False)
+            ax.plot(xn + e.separator_side * 0.035 * e.widths[i], e.u_notch[i],
+                    marker="<" if e.separator_side > 0 else ">", ms=4.5, color=color("cell"), mew=0, zorder=5)
         if valves and j_max > 0 and abs(e.j[i]) > 0.02 * j_max:
             (xp, up), (xw, un), into = valve_geometry(e, i, scale)
+            if abs(up - un) < 0.02 * (band[1] - band[0]):  # overpotential too small to draw an arrow
+                continue
             start, end = ((xp, up), (xw, un)) if into else ((xw, un), (xp, up))
             lw = lw_min + (lw_max - lw_min) * abs(e.j[i]) / j_max
-            ax.add_patch(FancyArrowPatch(start, end, arrowstyle="-|>", mutation_scale=4 + 2 * lw, lw=lw,
-                                         color=color("water_edge"), shrinkA=1.5, shrinkB=1.5, zorder=4))
+            ax.annotate("", xy=end, xytext=start, zorder=6,
+                        arrowprops=dict(arrowstyle="-|>", lw=lw, color=color("valve"), shrinkA=1, shrinkB=2,
+                                        mutation_scale=4 + 1.5 * lw))
     if show_zero and band[0] < 0 < band[1]:
         ax.axhline(0, color=color("warn"), lw=0.8, ls=(0, (4, 3)), zorder=1)
-        ax.text(0.01, 0, "0 V: plating", transform=ax.get_yaxis_transform(), color=color("warn"), fontsize=6.5,
-                va="bottom")
-    ax.set_xlim(e.edges[0], e.edges[-1])
     ax.set_ylim(band[1], band[0])  # potential points down
-    for s in ("top", "right", "bottom"):
-        ax.spines[s].set_visible(False)
-    ax.tick_params(axis="x", bottom=False, labelbottom=False)
     return {"band": band, "scale": scale}
 
 
 def draw_pipe(ax, x0, x1, c_e, kappa_eff, kappa_ref, cmap, norm):
-    h = 0.15 + 0.85 * kappa_eff / kappa_ref
-    ax.add_patch(Rectangle((x0, -h / 2), x1 - x0, h, facecolor=cmap(norm(c_e)), edgecolor="none"))
+    h = 0.25 + 0.75 * kappa_eff / kappa_ref
+    ax.add_patch(Rectangle((x0, -h / 2), x1 - x0, h, facecolor=cmap(norm(c_e)), lw=0, zorder=1))
+    for y in (-h / 2, h / 2):
+        ax.plot([x0, x1], [y, y], color=color("muted"), lw=0.6, zorder=2, solid_capstyle="butt")
+    return h
+
+
+def _break_marks(ax_top, ax_bottom):
+    d = 0.012
+    kw = dict(color=color("muted"), lw=0.8, clip_on=False)
+    for ax, y in ((ax_top, 0), (ax_bottom, 1)):
+        for x in (0, 1):
+            ax.plot([x - d, x + d], [y - 2 * d, y + 2 * d], transform=ax.transAxes, **kw)
 
 
 def plot_ladder(sim_or_solution, t: float | None = None, *, parameter_values=None, n_slices: int = 5,
-                notch: bool = True, valves: bool = True, markers: bool = True, pipe: bool = True,
-                width="double", title: str | None = None):
+                notch: bool = True, valves: bool = True, risers: bool = True, pipe: bool = True,
+                legend: bool = True, width="double", title: str | None = None, theme: str | None = None,
+                markers: bool | None = None):
     """Full-cell ladder at time ``t``: anode and cathode as rows of tanks, electrolyte pipe below.
 
-    Returns ``(fig, axes)`` with ``axes = {"negative", "positive", "separator", "pipe_*", "ladder"}``.
+    Anode (top) and cathode (bottom) share one potential scale with the axis broken in between.
+    Returns ``(fig, axes)`` with ``axes = {"negative", "positive", "pipe", "ladder"}``.
     Every layer can be switched off to keep paper figures lean.
     """
+    if markers is not None:  # old name of the risers
+        risers = markers
     L = ladder(sim_or_solution, t, parameter_values=parameter_values, n_slices=n_slices)
     n, p = L.negative, L.positive
     s0, s1 = L.separator_edges
-    ln, lp, ls = n.edges[-1] - n.edges[0], p.edges[-1] - p.edges[0], s1 - s0
+    x_end = float(p.edges[-1])
     j_max = float(max(np.abs(n.j).max(), np.abs(p.j).max()))
-
-    c_all = np.concatenate([n.c_e, p.c_e, [L.separator_c_e]])
-    dev = max(float(np.max(np.abs(c_all - L.c_e0))), 0.05 * L.c_e0)
-    norm = TwoSlopeNorm(vcenter=L.c_e0, vmin=max(0.0, L.c_e0 - dev), vmax=L.c_e0 + dev)
-    cmap = plt.get_cmap("BrBG")
+    span = max(np.diff(potential_band(n))[0], np.diff(potential_band(p))[0])
+    bn, bp = potential_band(n, span=span), potential_band(p, span=span)
     k_ref = float(max(n.kappa_eff.max(), p.kappa_eff.max(), L.separator_kappa_eff))
+    c_top = float(max(n.c_e.max(), p.c_e.max(), L.separator_c_e, L.c_e0))
 
-    with style_context():
-        fig = plt.figure(figsize=figsize(width, 0.55))
-        rows = [1, 0.13] if pipe else [1]
-        gs = fig.add_gridspec(len(rows), 3, width_ratios=[ln, max(ls, 0.18 * (ln + lp) / 2), lp],
-                              height_ratios=rows, wspace=0.02, hspace=0.03)
-        ax_n = fig.add_subplot(gs[0, 0])
-        ax_s = fig.add_subplot(gs[0, 1])
-        ax_p = fig.add_subplot(gs[0, 2])
-        draw_electrode(ax_n, n, j_max=j_max, notch=notch, valves=valves, markers=markers)
-        draw_electrode(ax_p, p, j_max=j_max, notch=notch, valves=valves, markers=markers)
-        ax_s.axis("off")
-        ax_n.set_title("anode", color=color("anode"), loc="center")
-        ax_p.set_title("cathode", color=color("cathode"), loc="center")
-        ax_n.set_ylabel("potential vs Li/Li$^+$ [V]  (zoom, down)")
-        ax_p.yaxis.tick_right()
-        ax_p.spines["left"].set_visible(False)
-        ax_p.spines["right"].set_visible(True)
+    with style_context(theme):
+        cmap, norm = salt_cmap(), Normalize(0, c_top)
+        fig = plt.figure(figsize=figsize(width, 0.78))
+        rows = [1, 1, 0.3] if pipe else [1, 1]
+        gs = fig.add_gridspec(len(rows), 1, height_ratios=rows, hspace=0.06)
+        ax_n = fig.add_subplot(gs[0])
+        ax_p = fig.add_subplot(gs[1], sharex=ax_n)
+        for ax in (ax_n, ax_p):
+            ax.axvspan(s0, s1, color=color("grid"), alpha=0.5, lw=0, zorder=0)
+            for sp in ("top", "right", "bottom"):
+                ax.spines[sp].set_visible(False)
+            ax.tick_params(axis="x", bottom=False, labelbottom=False)
+        kw = dict(j_max=j_max, notch=notch, valves=valves, risers=risers, salt=(cmap, norm))
+        draw_electrode(ax_n, n, band=bn, **kw)
+        draw_electrode(ax_p, p, band=bp, **kw)
+        if risers:  # anode standpipes run on through the cathode window (they are full there)
+            rw = tokens()["geometry"]["riser_width"]
+            for i in range(len(n.centers)):
+                draw_riser(ax_p, riser_x(n, i), rw * n.widths[i], bp[0] - 1, bp[1] + 1, cmap(norm(n.c_e[i])))
+        ax_n.set_xlim(0, x_end)
+        _break_marks(ax_n, ax_p)
+        ax_n.set_title("Anode", loc="left", color=color("anode"), fontweight="bold", fontsize=9, pad=3)
+        ax_p.text(0.005, 0.97, "Cathode  \u2198", transform=ax_p.transAxes, color=color("cathode"),
+                  fontweight="bold", va="top", fontsize=9)
+        ax_n.text((s0 + s1) / 2, 0.99, "sep.", transform=ax_n.get_xaxis_transform(), ha="center", va="top",
+                  fontsize=6.5, color=color("muted"))
+        fig.supylabel("potential vs Li/Li$^+$ [V]   (same scale, axis broken)", fontsize=8, color=color("ink"))
         if L.plating_potential < 0:
-            ax_n.text(0.98, 0.02, f"plating: {L.plating_potential * 1e3:.0f} mV at separator",
-                      transform=ax_n.transAxes, ha="right", va="bottom", color=color("warn"), fontsize=6.5)
-        axes = {"negative": ax_n, "separator": ax_s, "positive": ax_p, "ladder": L}
+            ax_n.text(0.99, 0.03, f"plating: {L.plating_potential * 1e3:.0f} mV at separator",
+                      transform=ax_n.transAxes, ha="right", va="bottom", color=color("warn"), fontsize=7)
+        axes = {"negative": ax_n, "positive": ax_p, "ladder": L}
+        if legend:
+            handles = [
+                Patch(facecolor=color("water"), alpha=0.85, label="lithium in the particles"),
+                Line2D([], [], ls="", marker="<", ms=5, color=color("cell"), label="level at the particle surface"),
+                Patch(facecolor=cmap(0.85), edgecolor=color("muted"), label=r"standpipe: level in the electrolyte"),
+                Line2D([], [], color=color("valve"), lw=1.6, marker=">", markevery=[1], ms=4,
+                       label="valve: reaction current, runs downhill"),
+            ]
+            ax_n.legend(handles=handles, loc="upper right", fontsize=6.5, handlelength=1.4, borderaxespad=0.2)
         if pipe:
-            pa = [fig.add_subplot(gs[1, k], sharex=a) for k, a in ((0, ax_n), (2, ax_p))]
-            ps = fig.add_subplot(gs[1, 1])
-            for e, ax in ((n, pa[0]), (p, pa[1])):
+            ax_e = fig.add_subplot(gs[2], sharex=ax_n)
+            heights = {}
+            for e in (n, p):
                 for i in range(len(e.c_e)):
-                    draw_pipe(ax, e.edges[i], e.edges[i + 1], e.c_e[i], e.kappa_eff[i], k_ref, cmap, norm)
-            draw_pipe(ps, 0, 1, L.separator_c_e, L.separator_kappa_eff, k_ref, cmap, norm)
-            ps.set_xlim(0, 1)
-            for ax in (*pa, ps):
-                ax.set_ylim(-0.55, 0.55)
-                ax.set_yticks([])
-                for sp in ("top", "right", "left"):
-                    ax.spines[sp].set_visible(False)
-            ps.set_xticks([])
-            ps.spines["bottom"].set_visible(False)
-            ps.text(0.5, -0.9, "sep.", ha="center", va="top", transform=ps.transData, fontsize=6.5,
-                    color=color("muted"))
-            pa[0].set_xlabel("position from current collector [µm]")
-            pa[1].set_xlabel("position [µm]")
-            sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-            cb = fig.colorbar(sm, ax=[*pa, ps], orientation="horizontal", fraction=0.9, aspect=60, shrink=0.45,
-                              pad=0.02)
-            cb.set_label("electrolyte salt [mol/m³]  (pipe thickness = effective conductivity)", fontsize=6.5)
-            cb.ax.tick_params(labelsize=6)
-            cb.outline.set_linewidth(0.4)
-            axes.update({"pipe_negative": pa[0], "pipe_positive": pa[1], "pipe_separator": ps, "colorbar": cb})
+                    heights[(e.side, i)] = draw_pipe(ax_e, e.edges[i], e.edges[i + 1], e.c_e[i], e.kappa_eff[i],
+                                                     k_ref, cmap, norm)
+            draw_pipe(ax_e, s0, s1, L.separator_c_e, L.separator_kappa_eff, k_ref, cmap, norm)
+            if risers:
+                rw = tokens()["geometry"]["riser_width"]
+                for e in (n, p):
+                    for i in range(len(e.c_e)):
+                        h = heights[(e.side, i)]
+                        ax_e.add_patch(Rectangle((riser_x(e, i) - rw * e.widths[i] / 2, h / 2 - 0.01),
+                                                 rw * e.widths[i], 0.6 - h / 2, facecolor=cmap(norm(e.c_e[i])),
+                                                 lw=0, zorder=1, clip_on=False))
+            ax_e.set_ylim(-0.6, 0.6)
+            ax_e.set_yticks([])
+            for sp in ("top", "right", "left"):
+                ax_e.spines[sp].set_visible(False)
+            ax_e.set_xlabel("position from the anode current collector [µm]")
+            ax_e.text(0.0, -0.58, "electrolyte: faint = drained of salt, thin = poor conductivity",
+                      fontsize=6.5, color=color("muted"), va="bottom")
+            axes["pipe"] = ax_e
+        else:
+            ax_p.tick_params(axis="x", bottom=True, labelbottom=True)
+            ax_p.set_xlabel("position from the anode current collector [µm]")
         if title is None:
             mode = "charge" if L.current < -1e-9 else "discharge" if L.current > 1e-9 else "rest"
             title = (f"{L.model + ', ' if L.model else ''}t = {L.t:.0f} s ({mode}), I = {L.current:.2f} A, "

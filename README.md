@@ -25,18 +25,18 @@ fig.savefig("balance.pdf")
 
 ### 2. The ladder (kinetics)
 
-`plot_ladder(simulation, t)` cuts each electrode into slices through its thickness and draws one tank per slice. It works with the SPMe and DFN.
+`plot_ladder(simulation, t)` cuts each electrode into slices through its thickness and draws one tank per slice. It works with the SPMe and DFN. Anode (top) and cathode (bottom) are two zoom windows on the *same* scale with the potential axis broken in between, so the cathode hangs below the anode as in the balance picture.
 
 | element | meaning | PyBaMM variable |
 |---|---|---|
 | tank shape | OCP of the electrode (width = dQ/dU, capped on plateaus) | OCP function of the parameter set |
 | water surface | mean lithiation of the slice | `R-averaged … particle concentration` |
 | notch ◂ | equilibrium level at the particle surface | `… electrode open-circuit potential` |
-| marker ▾ | pipe level φs − φe (what a Li reference in the electrolyte would read) | `… electrode surface potential difference` |
-| arrow | valve = charge transfer, width ∝ local current density | `… electrode interfacial current density` |
-| pipe | electrolyte: colour = salt concentration, thickness = effective conductivity | `… electrolyte concentration`, `… transport efficiency` |
+| standpipe | rises from the electrolyte pipe next to each tank; its water level is φs − φe (what a Li reference in the electrolyte there would read) | `… electrode surface potential difference` |
+| arrow | valve = charge transfer: where lithium crosses the interface, which way, how much (width ∝ local current density, slope = overpotential) | `… electrode interfacial current density` |
+| pipe | electrolyte: faint = drained of salt, thin = poor effective conductivity | `… electrolyte concentration`, `… transport efficiency` |
 
-Marker vs. notch is the reaction overpotential. Notch vs. water surface is how far solid diffusion lags behind. If the anode's pipe level at the separator drops below 0 V, lithium plating becomes possible, even when the tanks are not full yet.
+Standpipe level vs. notch is the reaction overpotential. Notch vs. water surface is how far solid diffusion lags behind. If the anode's pipe level at the separator drops below 0 V, lithium plating becomes possible, even when the tanks are not full yet.
 
 ![Ladder during a 2C discharge](docs/img/ladder_discharge.png)
 
@@ -44,7 +44,7 @@ During a rest the tanks equalise with each other through the pipe:
 
 ![Ladder during rest](docs/img/ladder_rest.png)
 
-Every layer can be switched off (`notch=`, `valves=`, `markers=`, `pipe=`) to keep paper figures lean.
+Every layer can be switched off (`notch=`, `valves=`, `risers=`, `pipe=`, `legend=`) to keep paper figures lean.
 
 ### Where the picture stops
 
@@ -55,6 +55,7 @@ Every layer can be switched off (`notch=`, `valves=`, `markers=`, `pipe=`) to ke
 
 ## Figures for papers
 
+* Two themes: `theme="site"` (default, navy as on chargetanks.com) and `theme="paper"` (white for print).
 * `figsize("single")` = 85 mm, `figsize("double")` = 170 mm wide.
 * PDF and SVG keep fonts as text (`pdf.fonttype 42`, `svg.fonttype none`). PNG is saved at 600 dpi by default.
 * Every function returns `(fig, axes)`, so everything stays editable with plain matplotlib.

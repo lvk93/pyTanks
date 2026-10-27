@@ -88,7 +88,10 @@ def test_plating_potential_is_reported(cycle_dfn):
     assert ax["ladder"].plating_potential == pytest.approx(expected)
 
 
-@pytest.mark.parametrize("flags", [{}, {"notch": False, "valves": False, "markers": False, "pipe": False}])
+OFF = {"notch": False, "valves": False, "risers": False, "pipe": False, "legend": False}
+
+
+@pytest.mark.parametrize("flags", [{}, OFF])
 def test_plot_ladder_layers_switch_off(cycle, flags):
     fig, ax = pytanks.plot_ladder(cycle, INSTANTS["discharge"], **flags)
-    assert ("pipe_negative" in ax) == flags.get("pipe", True)
+    assert ("pipe" in ax) == flags.get("pipe", True)

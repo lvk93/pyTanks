@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib.patches import FancyArrowPatch
 
 from . import _pybamm
-from .style import color, figsize, style_context, tokens
+from .style import color, figsize, style_context
 from .tanks import TankProfile, draw_ceiling, draw_tank, tank_profile
 
 
@@ -98,8 +98,18 @@ def balance(parameter_values, soc: float = 0.5, *, lli: float = 0.0, lam_ne: flo
 def _profiles(b: Balance) -> tuple[TankProfile, TankProfile]:
     # Graphite-like anodes climb to >2 V when empty; the window never gets there, so the tank
     # is cut a little below the empty end of the operating window (keeps the picture compact).
-    u_cut = max(1.0, float(b.Un(b.x_0)) + 0.2)
+    u_cut = max(0.6, float(b.Un(b.x_0)) + 0.05)
     return tank_profile(b.Un, b.Q_n, u_max=u_cut), tank_profile(b.Up, b.Q_p)
+
+
+def _panel(ax):
+    """Plot area as on the website: lighter panel, horizontal grid lines, no frame."""
+    ax.set_facecolor(color("panel"))
+    ax.grid(axis="y", color=color("grid"), lw=0.6)
+    ax.set_axisbelow(True)
+    for s in ("top", "right", "left"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(axis="y", length=0)
 
 
 def draw_tanks(ax, b: Balance, *, fresh: Balance | None = None, labels: bool = True, voltage: bool = True):
@@ -123,25 +133,25 @@ def draw_tanks(ax, b: Balance, *, fresh: Balance | None = None, labels: bool = T
     ua, uc = pa.potential(b.x), pc.potential(b.y)
     if voltage:
         xv = wa + gap / 2
-        ax.plot([cxa, xv], [ua, ua], color=color("muted"), lw=0.6, ls=(0, (2, 2)), zorder=1)
-        ax.plot([xv, cxc], [uc, uc], color=color("muted"), lw=0.6, ls=(0, (2, 2)), zorder=1)
-        ax.add_patch(FancyArrowPatch((xv, ua), (xv, uc), arrowstyle="<|-|>", mutation_scale=6, lw=0.8,
-                                     color=color("ink"), shrinkA=0, shrinkB=0, zorder=3))
-        ax.text(xv + gap * 0.06, (ua + uc) / 2, f"{uc - ua:.2f} V\ncell voltage", va="center", ha="left",
-                fontsize=7, color=color("ink"), linespacing=1.3)
+        ax.plot([cxa, xv], [ua, ua], color=color("muted"), lw=0.7, ls=(0, (3, 3)), zorder=1)
+        ax.plot([xv, cxc], [uc, uc], color=color("muted"), lw=0.7, ls=(0, (3, 3)), zorder=1)
+        ax.add_patch(FancyArrowPatch((xv, ua), (xv, uc), arrowstyle="<|-|>", mutation_scale=7, lw=1.0,
+                                     color=color("cell"), shrinkA=0, shrinkB=0, zorder=3))
+        ax.text(xv + gap * 0.06, (ua + uc) / 2, f"{uc - ua:.2f} V", va="bottom", ha="left",
+                fontsize=9, fontweight="bold", color=color("cell"))
+        ax.text(xv + gap * 0.06, (ua + uc) / 2, "cell voltage", va="top", ha="left", fontsize=7,
+                color=color("muted"))
     if labels:
         low = max(pa.u.max(), pc.u.max())
-        ax.text(cxa, pa.u.max() + 0.12, f"anode\n{b.x:.0%} full", ha="center", va="top", color=color("anode"),
-                fontweight="bold", fontsize=7, linespacing=1.2)
-        ax.text(cxc, pc.u.max() + 0.12, f"cathode\n{b.y:.0%} full", ha="center", va="top", color=color("cathode"),
-                fontweight="bold", fontsize=7, linespacing=1.2)
+        ax.text(cxa, pa.u.max() + 0.08, f"Anode {b.x:.0%}", ha="center", va="top", color=color("anode"),
+                fontweight="bold", fontsize=8)
+        ax.text(cxc, pc.u.max() + 0.08, f"Cathode {b.y:.0%}", ha="center", va="top", color=color("cathode"),
+                fontweight="bold", fontsize=8)
     else:
         low = max(pa.u.max(), pc.u.max())
     ax.set_xlim(-0.05 * x1, 1.05 * x1)
-    ax.set_ylim(low + 0.55, -0.3)  # potential points down
-    ax.set_xticks([])
-    ax.spines["bottom"].set_visible(False)
-    ax.set_ylabel("potential vs Li/Li$^+$ [V]  (depth below ceiling)")
+    ax.set_ylim(low + 0.35, -0.3)  # potential points down: depth below the ceiling = potential
+    ax.axis("off")
     return {"anode": pa, "cathode": pc, "x_anode": cxa, "x_cathode": cxc}
 
 
@@ -149,7 +159,8 @@ def draw_electrodes(ax, b: Balance, *, marker: bool = True, labels: bool = True)
     """Both half-cell potentials over the lithium in the negative electrode, operating window shaded."""
     q_lo, q_hi = b.q_range
     q = np.linspace(q_lo, q_hi, 400)
-    ax.axvspan(b.x_0 * b.Q_n, b.x_100 * b.Q_n, color=color("window"), alpha=tokens()["alpha"]["window"], lw=0)
+    _panel(ax)
+    ax.axvspan(b.x_0 * b.Q_n, b.x_100 * b.Q_n, color=color("water"), alpha=0.12, lw=0, zorder=0)
     ax.axhline(0, color=color("ceiling"), lw=0.8, ls=(0, (2, 2)))
     ax.plot(q, b.up_q(q), color=color("cathode"))
     ax.plot(np.linspace(0, q_hi, 400), b.un_q(np.linspace(0, q_hi, 400)), color=color("anode"))
@@ -157,12 +168,14 @@ def draw_electrodes(ax, b: Balance, *, marker: bool = True, labels: bool = True)
         qq = np.linspace(q_hi, b.Q_n, 120)
         ax.plot(qq, b.un_q(qq), color=color("anode"), ls=(0, (4, 3)), alpha=0.7)
     if marker:
-        ax.plot([b.q, b.q], [b.un_q(b.q), b.up_q(b.q)], color=color("ink"), lw=0.8, zorder=3)
+        ax.plot([b.q, b.q], [b.un_q(b.q), b.up_q(b.q)], color=color("cell"), lw=1.0, zorder=3)
         for v, c in ((b.up_q(b.q), "cathode"), (b.un_q(b.q), "anode")):
-            ax.plot(b.q, v, "o", ms=4, mfc=color(c), mec=color("navy"), mew=0.8, zorder=4)
+            ax.plot(b.q, v, "o", ms=5, mfc=color(c), mec=color("marker_edge"), mew=1.0, zorder=4)
     if labels:
         ax.text(0.02, 0.95, "cathode", transform=ax.transAxes, color=color("cathode"), fontweight="bold", va="top")
-        ax.text(0.02, 0.17, "anode", transform=ax.transAxes, color=color("anode"), fontweight="bold", va="top")
+        ax.text(0.62, 0.12, "anode", transform=ax.transAxes, color=color("anode"), fontweight="bold", va="top")
+        ax.text(0.99, 0.005, "ceiling Li/Li$^+$", transform=ax.transAxes, color=color("muted"), fontsize=7,
+                va="bottom", ha="right")
     ax.set_xlim(0, max(b.Q_n, q_hi) * 1.02)
     ax.set_ylim(-0.1, 4.6)
     ax.set_xlabel("lithium in the anode [Ah]")
@@ -173,26 +186,29 @@ def draw_cell(ax, b: Balance, *, fresh: Balance | None = None, marker: bool = Tr
     """Cell voltage over the lithium in the negative electrode with Vmin / Vmax."""
     q_lo, q_hi = b.q_range
     q = np.linspace(q_lo, q_hi, 400)
-    ax.axvspan(b.x_0 * b.Q_n, b.x_100 * b.Q_n, color=color("window"), alpha=tokens()["alpha"]["window"] * 1.5, lw=0)
+    _panel(ax)
+    ax.axvspan(b.x_0 * b.Q_n, b.x_100 * b.Q_n, color=color("water"), alpha=0.18, lw=0, zorder=0)
     if fresh is not None:  # fresh cell, shifted to the same 0 % SOC point
         dq = fresh.x_0 * fresh.Q_n - b.x_0 * b.Q_n
         fl, fh = fresh.q_range
         qf = np.linspace(fl, fh, 400)
         ax.plot(qf - dq, fresh.v_cell(qf), color=color("muted"), ls=(0, (4, 3)), lw=1.0, label="fresh")
-    ax.plot(q, b.v_cell(q), color=color("ink"))
+    ax.plot(q, b.v_cell(q), color=color("cell"))
     for v, name, xa, ha in ((b.v_max, "Vmax", 0.01, "left"), (b.v_min, "Vmin", 0.99, "right")):
         ax.axhline(v, color=color("warn"), lw=0.8, ls=(0, (4, 3)))
         ax.text(xa, v + 0.03, f"{name} {v:.2f} V", transform=ax.get_yaxis_transform(), ha=ha, va="bottom",
                 fontsize=6.5, color=color("warn"))
     if marker:
-        ax.plot(b.q, float(b.v_cell(b.q)), "o", ms=4, mfc=color("water"), mec=color("navy"), mew=0.8, zorder=4)
+        ax.plot(b.q, float(b.v_cell(b.q)), "o", ms=5, mfc=color("water"), mec=color("marker_edge"), mew=1.0,
+                zorder=4)
     ax.set_ylim(b.v_min - 0.35, b.v_max + 0.25)
     ax.set_xlabel("lithium in the anode [Ah]")
     ax.set_ylabel("cell voltage [V]")
 
 
 def plot_balance(parameter_values, soc: float = 0.5, *, lli: float = 0.0, lam_ne: float = 0.0,
-                 lam_pe: float = 0.0, show_fresh: bool | None = None, width="double", title: str | None = None):
+                 lam_pe: float = 0.0, show_fresh: bool | None = None, width="double", title: str | None = None,
+                 theme: str | None = None):
     """One call, one figure: tanks, electrode potentials and cell voltage of a PyBaMM parameter set.
 
     Returns ``(fig, axes)`` with ``axes = {"tanks", "electrodes", "cell"}`` for further editing.
@@ -200,7 +216,7 @@ def plot_balance(parameter_values, soc: float = 0.5, *, lli: float = 0.0, lam_ne
     b = balance(parameter_values, soc, lli=lli, lam_ne=lam_ne, lam_pe=lam_pe)
     aged = bool(lli or lam_ne or lam_pe)
     fresh = balance(parameter_values, soc) if (aged and show_fresh is not False) else None
-    with style_context():
+    with style_context(theme):
         fig = plt.figure(figsize=figsize(width, 0.62))
         gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.15], height_ratios=[1.55, 1])
         ax_t = fig.add_subplot(gs[:, 0])

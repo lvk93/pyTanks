@@ -19,8 +19,13 @@ def area(poly):
 
 def test_tokens_and_style_load():
     t = pytanks.tokens()
-    for key in ("anode", "cathode", "water", "ceiling", "ink", "warn"):
+    for key in ("anode", "cathode", "water", "ceiling"):
         assert t["colors"][key].startswith("#")
+    for theme in ("site", "paper"):
+        for key in ("background", "ink", "muted", "warn", "valve"):
+            assert t["themes"][theme][key].startswith("#")
+    with pytanks.style_context("paper"):
+        assert plt.rcParams["figure.facecolor"] == "#ffffff"
     with pytanks.style_context():
         assert plt.rcParams["pdf.fonttype"] == 42
         assert plt.rcParams["svg.fonttype"] == "none"
