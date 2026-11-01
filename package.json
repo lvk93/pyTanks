@@ -1,0 +1,27 @@
+{
+  "name": "pytanks",
+  "version": "0.2.0-dev.0",
+  "description": "Lithium-ion cells drawn as tanks (SVG): the drawing module of pytanks, shared with chargetanks.com.",
+  "type": "module",
+  "license": "BSD-3-Clause",
+  "author": "Lars von Kolzenberg",
+  "homepage": "https://chargetanks.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lvk93/pytanks.git"
+  },
+  "exports": {
+    ".": "./src/pytanks/js/index.js",
+    "./*": "./src/pytanks/js/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/pytanks/js/"
+  ],
+  "scripts": {
+    "test": "node --test \"tests/js/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
