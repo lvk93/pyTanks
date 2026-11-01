@@ -65,6 +65,15 @@ class Balance:
 
     @property
     def np_ratio(self) -> float:
+        """N/P as on chargetanks.com: anode capacity over the reversible cathode capacity in the voltage window.
+
+        From the stoichiometries: Q_n / (Q_p * (y_0 - y_100)).
+        """
+        return self.Q_n / (self.Q_p * (self.y_0 - self.y_100))
+
+    @property
+    def np_ratio_theoretical(self) -> float:
+        """Q_n / Q_p over the full stoichiometry range 0..1 (counts lithium the cathode never gives up)."""
         return self.Q_n / self.Q_p
 
 

@@ -19,3 +19,10 @@ def test_lli_shrinks_capacity(chen):
     aged = pytanks.balance(chen, lli=0.1)
     assert aged.Q_Li == pytest.approx(0.9 * fresh.Q_Li)
     assert aged.capacity < fresh.capacity
+
+
+def test_np_ratio_uses_the_reversible_cathode(chen):
+    b = pytanks.balance(chen)
+    assert b.np_ratio == pytest.approx(b.Q_n / b.capacity)  # capacity = reversible cathode capacity in the window
+    assert b.np_ratio == pytest.approx(1.13, abs=0.01)  # Chen2020
+    assert b.np_ratio_theoretical == pytest.approx(b.Q_n / b.Q_p)
