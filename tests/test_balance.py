@@ -1,6 +1,3 @@
-import io
-
-import numpy as np
 import pybamm
 import pytest
 
@@ -24,24 +21,8 @@ def test_lli_shrinks_capacity(chen):
     assert aged.capacity < fresh.capacity
 
 
-def test_plot_balance_returns_editable_axes(chen):
-    fig, ax = pytanks.plot_balance(chen, 0.3, lli=0.05, lam_pe=0.03)
-    assert set(ax) >= {"tanks", "electrodes", "cell", "balance"}
-    buf = io.BytesIO()
-    fig.savefig(buf, format="svg")
-    svg = buf.getvalue().decode()
-    assert "cell voltage" in svg  # text stays text (svg.fonttype = none)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="pdf")
-    assert buf.getvalue()[:4] == b"%PDF"
-
-
-def test_tanks_water_surface_matches_half_cells(chen):
-    import matplotlib.pyplot as plt
-
-    b = pytanks.balance(chen, soc=0.7)
-    fig, ax = plt.subplots()
-    info = pytanks.draw_tanks(ax, b)
-    v = info["cathode"].potential(b.y) - info["anode"].potential(b.x)
-    assert v == pytest.approx(float(b.v_cell(b.q)), abs=2e-3)
-    assert np.isfinite(info["anode"].w).all()
+def test_np_ratio_uses_the_reversible_cathode(chen):
+    b = pytanks.balance(chen)
+    assert b.np_ratio == pytest.approx(b.Q_n / b.capacity)  # capacity = reversible cathode capacity in the window
+    assert b.np_ratio == pytest.approx(1.13, abs=0.01)  # Chen2020
+    assert b.np_ratio_theoretical == pytest.approx(b.Q_n / b.Q_p)

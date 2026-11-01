@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use pytanks in your work, please cite it as below."
-title: "pytanks: battery models drawn as tanks, pipes and valves"
+title: "pytanks: lithium-ion cells drawn as tanks"
 type: software
 authors:
   - family-names: "von Kolzenberg"
@@ -8,7 +8,7 @@ authors:
 repository-code: "https://github.com/lvk93/pytanks"
 url: "https://chargetanks.com"
 license: BSD-3-Clause
-version: 0.1.0.dev0
+version: 0.2.0.dev0
 keywords:
   - lithium-ion battery
   - PyBaMM

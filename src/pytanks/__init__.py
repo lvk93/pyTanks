@@ -1,28 +1,18 @@
-"""pytanks: battery models drawn as tanks, pipes and valves - the chargetanks.com picture language for PyBaMM."""
+"""pytanks: lithium-ion cells drawn as tanks - the chargetanks.com picture language for PyBaMM.
 
-from .balance import Balance, balance, draw_cell, draw_electrodes, draw_tanks, plot_balance
-from .ladder import Ladder, ladder, plot_ladder
-from .style import figsize, style_context, style_path, tokens, use_style
-from .tanks import TankProfile, draw_tank, tank_profile
+Python computes from PyBaMM, one JavaScript module draws (``js_dir()``); chargetanks.com draws with the same module.
+"""
 
-__version__ = "0.1.0.dev0"
+from importlib import resources
+from pathlib import Path
 
-__all__ = [
-    "Balance",
-    "Ladder",
-    "TankProfile",
-    "balance",
-    "draw_cell",
-    "draw_electrodes",
-    "draw_tank",
-    "draw_tanks",
-    "figsize",
-    "ladder",
-    "plot_balance",
-    "plot_ladder",
-    "style_context",
-    "style_path",
-    "tank_profile",
-    "tokens",
-    "use_style",
-]
+from .balance import Balance, balance
+
+__version__ = "0.2.0.dev0"
+
+__all__ = ["Balance", "balance", "js_dir"]
+
+
+def js_dir() -> Path:
+    """Folder of the JavaScript drawing module shipped with the package (``index.js``, ``kit.js``, ...)."""
+    return Path(str(resources.files("pytanks") / "js"))

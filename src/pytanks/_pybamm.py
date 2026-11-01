@@ -63,13 +63,3 @@ def esoh(parameter_values: pybamm.ParameterValues, *, Q_n=None, Q_p=None, Q_Li=N
     out["fresh"] = base
     return out
 
-
-def electrolyte_conductivity(parameter_values, c_e, T):
-    """kappa(c_e, T) in S/m for an array of concentrations."""
-    fn = parameter_values["Electrolyte conductivity [S.m-1]"]
-    if not callable(fn):
-        return np.full_like(np.asarray(c_e, dtype=float), float(fn))
-    out = []
-    for c in np.atleast_1d(c_e):
-        out.append(float(parameter_values.evaluate(fn(pybamm.Scalar(float(c)), pybamm.Scalar(float(T))))))
-    return np.array(out)
