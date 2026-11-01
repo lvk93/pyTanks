@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,8 +28,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install "${{ matrix.pybamm }}" -e ".[dev]"
       - name: Lint
-        run: ruff check src tests examples
+        run: ruff check src tests
       - name: Test
         run: pytest -q
-      - name: Example figures
-        run: python examples/make_figures.py /tmp/figs
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test drawing module
+        run: npm test

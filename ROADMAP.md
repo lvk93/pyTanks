@@ -1,17 +1,12 @@
 # Roadmap
 
-## 0.1 (now)
-- [x] Lithium balance from a parameter set (`plot_balance`), ageing via LLI / LAM
-- [x] Ladder from SPMe/DFN results (`plot_ladder`): slice tanks, surface notch, pipe-level markers, valves, electrolyte pipe
-- [x] Physics tests: arrows downhill, water volume = lithium, no overlapping tanks
-- [x] Style file, design tokens, fixtures for chargetanks.com
+## 0.2 (now): one drawing for the website and the package
+- [x] The drawings of the lithium-balance chapter on chargetanks.com (tanks, electrode potentials, cell voltage, lithium account, blends, dQ/dV) live here as one JavaScript module (`src/pytanks/js/`); the website installs pytanks and draws with it
+- [x] Python computes the lithium balance from a PyBaMM parameter set (`balance`), no model logic of its own
+- [ ] Basic picture: tanks with a SOC slider, from a PyBaMM parameter set, as a Jupyter widget and as a standalone HTML file
+- [ ] Aging picture: the same with sliders for lost lithium, anode and cathode (or cycle number from an aging simulation)
 
-## Next
-- [ ] Overview inset: whole tank with the zoomed band marked
-- [ ] Stage 3: diffusion zoom - one tank resolved into radial shells (`Positive particle concentration`), shells sized by volume, valve on the outer shell; animation over time
-- [ ] Animation helper for the ladder (`animate_ladder(sim, times)`)
-- [ ] Blends (graphite + silicon): two connected tanks per slice
-- [ ] Double layer as a small buffer vessel at each valve (needed for the impedance chapter)
-- [ ] Impedance: single tank + valve = R-RC; ladder = transmission line
-- [ ] Release on PyPI with a Zenodo DOI; JOSS paper
-- [ ] Ask the PyBaMM team to list pytanks among community extensions
+## Later
+- [ ] Export without a browser (SVG/PDF for papers)
+- [ ] Kinetics: the first prototype (matplotlib, "ladder") is parked on the branch `archive/kinetics-prototype`
+- [ ] Release on PyPI with a Zenodo DOI

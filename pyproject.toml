@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytanks"
-version = "0.1.0.dev0"
-description = "Battery models drawn as tanks, pipes and valves: the chargetanks.com picture language for PyBaMM."
+version = "0.2.0.dev0"
+description = "Lithium-ion cells drawn as tanks: the chargetanks.com picture language for PyBaMM."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
@@ -13,7 +13,6 @@ authors = [{ name = "Lars von Kolzenberg" }]
 requires-python = ">=3.10"
 dependencies = [
     "pybamm>=25.12",
-    "matplotlib>=3.8",
     "numpy>=1.24",
 ]
 keywords = ["battery", "lithium-ion", "pybamm", "visualization", "electrochemistry", "teaching"]
