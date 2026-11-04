@@ -55,7 +55,7 @@ setStyle({ profile: 'paper', theme: 'light' });  // figure for a paper
 
 A single drawing can override the page default with `data-pytanks-profile` or `data-pytanks-theme` on its container or an ancestor. Drawings do not redraw themselves when the window size changes; call them again if you need that.
 
-Modules: `kit.js` (colours, SVG elements, line chart), `balance.js` (tanks, electrode potentials, cell voltage, lithium account, fill gauge), `blend.js` (blended anodes, dQ/dV), `materials.js` (one material as a tank, the shelf of all materials, capacity bars, overflow weir and particles, LMFP cascade, S-curve), `model/idealCell.js` and `model/blendTanks.js` (ideal or real half-cell curves to a cell).
+Modules: `kit.js` (colours, SVG elements, line chart), `balance.js` (tanks, electrode potentials, cell voltage, lithium account, fill gauge), `blend.js` (blended anodes, dQ/dV), `materials.js` (one material as a tank, the shelf of all materials, capacity bars, overflow weir and particles, LMFP cascade, S-curve), `shapes.js` (where tank shapes come from: linear tank, ideal and regular solution, on a true width scale), `model/idealCell.js` and `model/blendTanks.js` (ideal or real half-cell curves to a cell).
 
 ## Development
 

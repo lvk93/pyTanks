@@ -159,13 +159,15 @@ export function drawShelf(container, data, current, nav) {
     const m = data[slug];
     const cx = i < 4 ? 50 + i * 41 : 216 + (i - 4) * 41;
     const color = m.kind === 'anode' ? T.anode : T.cathode;
-    const g = el('g', { class: 'shelf-item', opacity: !current || current === slug ? 1 : 0.5, 'data-slug': slug });
+    // the open material strong, the others only as a faint outline (no material open: all strong)
+    const active = !current || current === slug;
+    const g = el('g', { class: 'shelf-item', opacity: active ? 1 : 0.4, 'data-slug': slug });
     if (nav) { g.setAttribute('role', 'link'); g.setAttribute('tabindex', '0'); g.setAttribute('aria-label', `${m.name}: open part`); g.style.cursor = 'pointer'; }
     // whole column clickable, not only the (often narrow) tank
     g.append(el('rect', { x: cx - slotW / 2, y: top - 8, width: slotW, height: H - top - 10, fill: 'transparent' }));
     let ext = [top - 5, top + 9]; // vertical extent of the tank for the marker
     if (slug === 'lithium') {
-      g.append(el('rect', { x: cx - slotW / 2, y: top - 2, width: slotW, height: 6, fill: T.cell }));
+      g.append(el('rect', { x: cx - slotW / 2, y: top - 2, width: slotW, height: 6, fill: active ? T.cell : 'none', stroke: T.cell, 'stroke-width': 1 }));
     } else {
       const v = m.variants[m.defaultVariant ?? 0];
       // Only the used window: cut the first and last percent of the fill (steep ends = long thin tails)
@@ -178,7 +180,7 @@ export function drawShelf(container, data, current, nav) {
       const w = (p) => sc(p.w);
       const d = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
         ...[...pts].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), 'Z'];
-      g.append(el('path', { d: d.join(''), fill: color, 'fill-opacity': 0.35, stroke: color, 'stroke-width': 1.5 }));
+      g.append(el('path', { d: d.join(''), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: color, 'stroke-width': 1.5 }));
     }
     g.append(el('text', { x: cx, y: H - 30 + 2, fill: color, 'font-size': fs(10), 'font-weight': 700, 'text-anchor': 'middle' }, SHORT[slug]));
     g.append(el('text', { x: cx, y: H - 18, fill: T.muted, 'font-size': fs(9), 'text-anchor': 'middle' }, m.q));
@@ -209,11 +211,12 @@ export function drawCapacity(container, data, current, nav) {
     const m = data[slug];
     const color = m.kind === 'anode' ? T.anode : T.cathode;
     const y = top + i * rowH;
-    const g = el('g', { class: 'shelf-item', opacity: !current || current === slug ? 1 : 0.4, 'data-slug': slug });
+    const active = !current || current === slug;
+    const g = el('g', { class: 'shelf-item', opacity: active ? 1 : 0.4, 'data-slug': slug });
     if (nav) { g.setAttribute('role', 'link'); g.setAttribute('tabindex', '0'); g.setAttribute('aria-label', `${m.name}: open part`); g.style.cursor = 'pointer'; }
     g.append(el('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' }));
     g.append(el('text', { x: left - 8, y: y + rowH / 2, fill: color, 'font-size': fs(11), 'font-weight': 700, 'text-anchor': 'end', 'dominant-baseline': 'middle' }, SHORT[slug]));
-    g.append(el('rect', { x: left, y: y + 5, width: Math.max(2, x(m.q) - left), height: rowH - 10, fill: color, 'fill-opacity': 0.55, stroke: color, rx: 2 }));
+    g.append(el('rect', { x: left, y: y + 5, width: Math.max(2, x(m.q) - left), height: rowH - 10, fill: color, 'fill-opacity': active ? 0.55 : 0, stroke: color, rx: 2 }));
     g.append(el('text', { x: x(m.q) + 5, y: y + rowH / 2, fill: T.text, 'font-size': fs(10.5), 'dominant-baseline': 'middle' }, m.q));
     svg.append(g);
   });

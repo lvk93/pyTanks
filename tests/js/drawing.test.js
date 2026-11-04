@@ -123,3 +123,32 @@ test('fit keeps long labels inside their room, never below the wide size', () =>
   drawCell(new Node('div'), cell, cell.xMin, 12);
   assert.equal(fit(12, 'x'.repeat(200), 50, true), 12);
 });
+
+const { binodal, span90, uRegular, wRegular, KT, drawTankShapes, drawShapeCompare, drawInteractionCurve, drawInteractionTank } = await import('../../src/pytanks/js/index.js');
+
+test('shapes: ideal solid solution holds 90 % of its lithium within 2 kT ln 19 (about 151 mV)', () => {
+  assert.ok(Math.abs(span90(0) - 2 * KT * Math.log(19)) < 1e-9);
+  assert.ok(Math.abs(span90(0) - 0.1513) < 0.001);
+  // widest at half full, 1/(4 kT) per volt
+  assert.ok(Math.abs(wRegular(0.5) - 0.25 / KT) < 1e-9);
+  assert.ok(Math.abs(uRegular(0.5)) < 1e-12);
+});
+
+test('shapes: repulsion stretches the tank, attraction squeezes it, above 2 kT the material splits', () => {
+  assert.ok(span90(-10) > 0.6 && span90(-10) < 0.62);
+  assert.ok(span90(1.5) < span90(0));
+  assert.equal(binodal(2), null);
+  const xb = binodal(4.5);
+  assert.ok(xb > 0 && xb < 0.1);
+  // both phases at the same potential: the binodal point lies on U0
+  assert.ok(Math.abs(uRegular(xb, 4.5)) < 1e-9);
+});
+
+test('shapes: all figures draw', () => {
+  for (const draw of [(b) => drawTankShapes(b), (b) => drawInteractionCurve(b, 3), (b) => drawInteractionTank(b, 3), (b) => drawInteractionTank(b, -5),
+    (b) => drawShapeCompare(b, [{ name: 'test', color: '#fff', x: [0, 0.5, 1], u: [0.5, 0.2, 0.1] }])]) {
+    const box = new Node('div');
+    draw(box);
+    assert.ok(box.all('path').length >= 1);
+  }
+});
