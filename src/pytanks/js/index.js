@@ -6,5 +6,5 @@ export * from './balance.js';
 export * from './blend.js';
 export * from './materials.js';
 export * from './shapes.js';
-export * from './model/idealCell.js';
+export * from './model/linearCell.js';
 export * from './model/blendTanks.js';

@@ -5,9 +5,9 @@
 // Material: function fill (0..1) -> potential vs Li/Li+ (falls with the fill), plus a share
 // of the capacity (share, sum 1).
 
-// Ideal tanks (straight lines): silicon starts taking up lithium much earlier (hangs lower, further from the ceiling)
-export const IDEAL_SILICON = { empty: 0.6, full: 0.05 };
-export const IDEAL_GRAPHITE = { empty: 0.25, full: 0.08 };
+// Linear tanks (straight lines): silicon starts taking up lithium much earlier (hangs lower, further from the ceiling)
+export const LINEAR_SILICON = { empty: 0.6, full: 0.05 };
+export const LINEAR_GRAPHITE = { empty: 0.25, full: 0.08 };
 
 export function lineU(tank) {
   return (f) => tank.empty - (tank.empty - tank.full) * f;

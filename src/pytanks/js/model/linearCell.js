@@ -1,4 +1,4 @@
-// Ideal tanks (constant cross-section) of the lithium-balance chapter: every electrode is a straight line
+// Linear tanks (constant cross-section) of the lithium-balance chapter: every electrode is a straight line
 // between "empty" and "full" (potential vs Li/Li+). Real curves plug in as { U }. No DOM, so it can be tested.
 //
 // Quantities in Ah:
@@ -10,8 +10,8 @@
 // The full anode reaches up to the ceiling (0 V): once it is full, the water overflows (plating) without a jump in
 // the cell voltage. The cathode starts at 4.25 V, so that at Vmax = 4.2 V: N/P 1.1 is limited at the top by the empty
 // cathode (N/P_cap = N/P_fill), from N/P ~0.92 the anode reaches the ceiling, and the aging quiz loses 2 %.
-export const IDEAL_CATHODE = { empty: 4.25, full: 3.6 };
-export const IDEAL_ANODE = { empty: 0.6, full: 0 };
+export const LINEAR_CATHODE = { empty: 4.25, full: 3.6 };
+export const LINEAR_ANODE = { empty: 0.6, full: 0 };
 
 // Potential vs Li/Li+ at fill 0..1 (straight line: slope = 1/cross-section)
 export function potential(tank, fill) {
@@ -29,7 +29,7 @@ function bisect(f, lo, hi, target) {
   return (a + b) / 2;
 }
 
-// Electrode as a function fill -> potential: ideal straight line (object with empty/full) or real curve ({ U })
+// Electrode as a function fill -> potential: linear straight line (object with empty/full) or real curve ({ U })
 export function electrodeU(electrode) {
   return typeof electrode.U === 'function' ? electrode.U : (fill) => potential(electrode, fill);
 }
@@ -56,7 +56,7 @@ export function realElectrode(material, direction = 'cha') {
   return { name: material.name, U };
 }
 
-export function idealCell({ qCath, qAnode, li, vMin, vMax, cathode = IDEAL_CATHODE, anode = IDEAL_ANODE }) {
+export function linearCell({ qCath, qAnode, li, vMin, vMax, cathode = LINEAR_CATHODE, anode = LINEAR_ANODE }) {
   const cathodeU = electrodeU(cathode);
   const anodeU = electrodeU(anode);
   // Physical range: the cathode takes at most qCath, the anode gets at most li

@@ -13,17 +13,17 @@ class Node {
 }
 globalThis.document = { createElementNS: (ns, name) => new Node(name), createElement: (name) => new Node(name) };
 
-const { drawTanks, drawElectrodes, drawCell, drawAccount, idealCell, lithiumAccount, IDEAL_ANODE, IDEAL_CATHODE } = await import('../../src/pytanks/js/index.js');
-const { drawBlendTanks, blendElectrode, lineU, IDEAL_SILICON, IDEAL_GRAPHITE } = await import('../../src/pytanks/js/index.js');
+const { drawTanks, drawElectrodes, drawCell, drawAccount, linearCell, lithiumAccount, LINEAR_ANODE, LINEAR_CATHODE } = await import('../../src/pytanks/js/index.js');
+const { drawBlendTanks, blendElectrode, lineU, LINEAR_SILICON, LINEAR_GRAPHITE } = await import('../../src/pytanks/js/index.js');
 
-const cell = idealCell({ qCath: 10, qAnode: 11, li: 10, vMin: 3.0, vMax: 4.2 });
+const cell = linearCell({ qCath: 10, qAnode: 11, li: 10, vMin: 3.0, vMax: 4.2 });
 
-test('ideal cell: Vmin and Vmax cut the window, cell voltage rises with lithium in the anode', () => {
+test('linear cell: Vmin and Vmax cut the window, cell voltage rises with lithium in the anode', () => {
   assert.ok(Math.abs(cell.vCell(cell.xMin) - 3.0) < 1e-6);
   assert.ok(Math.abs(cell.vCell(cell.xMax) - 4.2) < 1e-6 || cell.highLimit === 'cathode-empty');
   for (let x = cell.xLo; x < cell.xHi - 0.1; x += 0.5) assert.ok(cell.vCell(x + 0.1) > cell.vCell(x));
-  assert.equal(IDEAL_ANODE.full, 0);
-  assert.equal(IDEAL_CATHODE.empty, 4.25);
+  assert.equal(LINEAR_ANODE.full, 0);
+  assert.equal(LINEAR_CATHODE.empty, 4.25);
 });
 
 test('tanks: both walls, water and the cell voltage label', () => {
@@ -48,7 +48,7 @@ test('charts and lithium account draw an svg each', () => {
 });
 
 test('blend: two tanks share one level', () => {
-  const blend = blendElectrode([{ name: 'Silicon', share: 0.25, U: lineU(IDEAL_SILICON) }, { name: 'Graphite', share: 0.75, U: lineU(IDEAL_GRAPHITE) }]);
+  const blend = blendElectrode([{ name: 'Silicon', share: 0.25, U: lineU(LINEAR_SILICON) }, { name: 'Graphite', share: 0.75, U: lineU(LINEAR_GRAPHITE) }]);
   const box = new Node('div');
   drawBlendTanks(box, blend, 0.5);
   assert.ok(box.children[0].all('text').some((t) => t.textContent === `${blend.U(0.5).toFixed(2)} V`));

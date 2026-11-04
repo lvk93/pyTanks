@@ -9,7 +9,7 @@ ROOT = Path(__file__).parents[1]
 
 def test_drawing_module_ships_with_the_package():
     names = {p.relative_to(pytanks.js_dir()).as_posix() for p in pytanks.js_dir().rglob("*.js")}
-    assert {"index.js", "kit.js", "balance.js", "blend.js", "model/idealCell.js", "model/blendTanks.js"} <= names
+    assert {"index.js", "kit.js", "balance.js", "blend.js", "model/linearCell.js", "model/blendTanks.js"} <= names
 
 
 def test_versions_agree():

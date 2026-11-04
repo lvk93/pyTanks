@@ -1,15 +1,15 @@
 // Lithium balance: tanks hanging from the Li/Li+ ceiling, electrode potentials, cell voltage, lithium account and the
-// fill gauge, drawn as SVG into a container element. The cell comes from model/idealCell.js (ideal or real curves).
+// fill gauge, drawn as SVG into a container element. The cell comes from model/linearCell.js (linear or real curves).
 // These are the drawings of the lithium-balance chapter on chargetanks.com, which loads them from here.
-import { IDEAL_ANODE } from './model/idealCell.js';
+import { LINEAR_ANODE } from './model/linearCell.js';
 import { chart, el, fmt, fs, niceTicks, pct, svgRoot, T, use } from './kit.js';
 
 /* Tank picture ------------------------------------------------------------------------------- */
 // Ceiling = Li/Li+ at the top; depth below the ceiling = potential. Tank width ~ dQ/dU, area ~ capacity.
-// Ideal tanks are rectangles; real curves (graphite, NMC) give steps or funnels. Very flat
+// Linear tanks are rectangles; real curves (graphite, NMC) give steps or funnels. Very flat
 // plateaus would be infinitely wide, so the width is capped per tank.
 export const PX_PER_V = 60;
-export const K_WIDTH = 150 / (16 / (IDEAL_ANODE.empty - IDEAL_ANODE.full)); // ideal anode with 16 Ah = 150 px
+export const K_WIDTH = 150 / (16 / (LINEAR_ANODE.empty - LINEAR_ANODE.full)); // linear anode with 16 Ah = 150 px
 
 export function tankProfile(U, q, { uMin = -Infinity, cap }) {
   const n = 220;
