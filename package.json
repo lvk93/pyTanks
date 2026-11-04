@@ -1,6 +1,6 @@
 {
   "name": "pytanks",
-  "version": "0.2.0-dev.0",
+  "version": "0.3.0",
   "description": "Lithium-ion cells drawn as tanks (SVG): the drawing module of pytanks, shared with chargetanks.com.",
   "type": "module",
   "license": "BSD-3-Clause",

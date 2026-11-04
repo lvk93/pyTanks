@@ -8,7 +8,7 @@ authors:
 repository-code: "https://github.com/lvk93/pytanks"
 url: "https://chargetanks.com"
 license: BSD-3-Clause
-version: 0.2.0.dev0
+version: 0.3.0
 keywords:
   - lithium-ion battery
   - PyBaMM
