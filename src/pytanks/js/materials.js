@@ -140,7 +140,7 @@ export function drawShelf(container, data, current, nav) {
   const W = 360;
   const top = 26;
   const pxPerV = 58;
-  const uMax = 4.5;
+  const uMax = 4.7; // room for high-voltage LCO (down to about 4.55 V)
   const H = top + uMax * pxPerV + 40;
   const y = (u) => top + u * pxPerV;
   const svg = svgRoot(container, W, H, 'All materials on one voltage axis: anodes left, cathodes right, tank shapes normalised to the same width');
