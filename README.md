@@ -2,7 +2,7 @@
 
 **Lithium-ion cells drawn as tanks.** pytanks turns [PyBaMM](https://pybamm.org) parameter sets into the picture language of [chargetanks.com](https://chargetanks.com): each electrode is a tank hanging from the Li/Li⁺ ceiling, its width is the capacity per volt (dQ/dU), the water in it is lithium, and the cell voltage is the height difference between the two water surfaces.
 
-> Status: early development (0.2.0.dev0). The drawing module is in place and already draws every figure of the [lithium-balance chapter](https://chargetanks.com/blog/lithium-balance/) and of the upcoming materials chapter. The notebook widget and the standalone HTML export are next, see [ROADMAP.md](ROADMAP.md).
+> Status: early development (0.3.0). The drawing module is in place, with size profiles and colour themes, and already draws every figure of the [lithium-balance chapter](https://chargetanks.com/blog/lithium-balance/) and of the upcoming materials chapter. The notebook widget and the standalone HTML export are next, see [ROADMAP.md](ROADMAP.md).
 
 ## One drawing, two homes
 
@@ -32,6 +32,28 @@ import { idealCell, drawTanks } from 'pytanks';
 const cell = idealCell({ qCath: 10, qAnode: 11, li: 10, vMin: 3.0, vMax: 4.2 });
 drawTanks(document.querySelector('#tanks'), cell, cell.xMin + 0.5 * cell.capacity);
 ```
+
+### Profiles and themes
+
+Every drawing describes only what is shown. How big it is shown comes from a profile, the colours from a theme:
+
+| Profile | For | Effect |
+| --- | --- | --- |
+| `wide` (default) | browser on a computer | reference look |
+| `compact` | phone, single-column figure | text about 30 % larger, charts flatter |
+| `paper` | print | fixed width of 85 mm, text about 8–9 pt |
+| `auto` | websites | `compact` below 600 px viewport width, otherwise `wide` |
+
+Themes: `dark` (default, dark blue background as on chargetanks.com) and `light` (white background for papers and slides).
+
+```js
+import { setStyle } from 'pytanks';
+
+setStyle({ profile: 'auto' });                   // every drawing on the page
+setStyle({ profile: 'paper', theme: 'light' });  // figure for a paper
+```
+
+A single drawing can override the page default with `data-pytanks-profile` or `data-pytanks-theme` on its container or an ancestor. Drawings do not redraw themselves when the window size changes; call them again if you need that.
 
 Modules: `kit.js` (colours, SVG elements, line chart), `balance.js` (tanks, electrode potentials, cell voltage, lithium account, fill gauge), `blend.js` (blended anodes, dQ/dV), `materials.js` (one material as a tank, the shelf of all materials, capacity bars, overflow weir and particles, LMFP cascade, S-curve), `model/idealCell.js` and `model/blendTanks.js` (ideal or real half-cell curves to a cell).
 

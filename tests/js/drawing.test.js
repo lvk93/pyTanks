@@ -53,3 +53,73 @@ test('blend: two tanks share one level', () => {
   drawBlendTanks(box, blend, 0.5);
   assert.ok(box.children[0].all('text').some((t) => t.textContent === `${blend.U(0.5).toFixed(2)} V`));
 });
+
+/* Profiles and themes ------------------------------------------------------------------------- */
+const { setStyle, fit, PROFILES, THEMES } = await import('../../src/pytanks/js/index.js');
+const compactH = () => Math.round(wideH * PROFILES.compact.chart);
+const fontSizes = (svg) => svg.all('text').map((t) => Number(t.attrs['font-size']));
+const drawWith = (style, draw) => {
+  setStyle(style);
+  const box = new Node('div');
+  draw(box);
+  setStyle({ profile: 'wide', theme: 'dark' });
+  return box.children[0];
+};
+const wideH = Number(drawWith({}, (b) => drawCell(b, cell, cell.xMin, 12)).attrs.viewBox.split(' ')[3]);
+
+test('wide/dark is the default and keeps the reference sizes and colours', () => {
+  const svg = drawWith({}, (b) => drawCell(b, cell, cell.xMin, 12));
+  assert.equal(svg.attrs.viewBox, `0 0 360 ${wideH}`);
+  assert.ok(fontSizes(svg).every((f) => Number.isInteger(f) && f <= 12));
+  assert.equal(svg.attrs.width, undefined);
+  assert.ok(svg.all('text').some((t) => t.attrs.fill === THEMES.dark.text));
+});
+
+test('compact: larger text and a flatter chart', () => {
+  const wide = drawWith({ profile: 'wide' }, (b) => drawCell(b, cell, cell.xMin, 12));
+  const compact = drawWith({ profile: 'compact' }, (b) => drawCell(b, cell, cell.xMin, 12));
+  assert.equal(compact.attrs.viewBox, `0 0 360 ${compactH()}`);
+  assert.ok(Math.min(...fontSizes(compact)) > Math.max(...fontSizes(wide)) - 1);
+  assert.ok(Math.min(...fontSizes(compact)) >= 12.5);
+});
+
+test('paper: physical size in mm', () => {
+  const svg = drawWith({ profile: 'paper' }, (b) => drawCell(b, cell, cell.xMin, 12));
+  assert.equal(svg.attrs.width, '85mm');
+  assert.ok(svg.attrs.height.endsWith('mm'));
+});
+
+test('light theme: background-coloured halo and dark text', () => {
+  const svg = drawWith({ theme: 'light' }, (b) => drawCell(b, cell, cell.xMin, 12));
+  const strokes = svg.all('text').map((t) => t.attrs.stroke).filter(Boolean);
+  assert.ok(strokes.length > 0 && strokes.every((s) => s === THEMES.light.bg));
+  assert.ok(svg.all('text').some((t) => t.attrs.fill === THEMES.light.text));
+});
+
+test('auto picks compact on a narrow viewport', () => {
+  const saved = globalThis.innerWidth;
+  globalThis.innerWidth = 390;
+  const svg = drawWith({ profile: 'auto' }, (b) => drawCell(b, cell, cell.xMin, 12));
+  globalThis.innerWidth = saved;
+  assert.equal(svg.attrs.viewBox, `0 0 360 ${compactH()}`);
+});
+
+test('container attribute overrides the page default', () => {
+  const host = new Node('figure');
+  host.attrs['data-pytanks-profile'] = 'compact';
+  const box = new Node('div');
+  box.closest = (sel) => (sel === '[data-pytanks-profile]' ? host : null);
+  drawCell(box, cell, cell.xMin, 12);
+  assert.equal(box.children[0].attrs.viewBox, `0 0 360 ${compactH()}`);
+});
+
+test('fit keeps long labels inside their room, never below the wide size', () => {
+  setStyle({ profile: 'compact' });
+  const svg = new Node('div'); drawCell(svg, cell, cell.xMin, 12); // activates compact
+  assert.equal(fit(12, 'short', 300, true), Math.round(12 * PROFILES.compact.font * 10) / 10);
+  assert.ok(fit(12, 'x'.repeat(50), 336, true) < 12 * PROFILES.compact.font);
+  assert.equal(fit(12, 'x'.repeat(200), 50, true), 12);
+  setStyle({ profile: 'wide' });
+  drawCell(new Node('div'), cell, cell.xMin, 12);
+  assert.equal(fit(12, 'x'.repeat(200), 50, true), 12);
+});
