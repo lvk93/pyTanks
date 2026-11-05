@@ -112,11 +112,21 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
     }
     // Wall open at the top (towards the ceiling), closed at the bottom: left side down, bottom, right side up.
     // v.open: no bottom (the curve goes on beyond the view or the measurement), both sides as separate lines.
-    const side = (sgn) => pts.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sgn * W_(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('');
-    const wall = v.open ? `${side(-1)}${side(1)}`
-      : [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-        ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)].join('');
-    svg.append(el('path', { d: wall, fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-dasharray': v.dash }));
+    // v.dashFrom: from this potential on (deeper) the wall is dashed, e.g. an extrapolation beyond the measurement;
+    // one outline, so the width runs on smoothly across the join.
+    const side = (pp, sgn) => pp.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sgn * W_(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('');
+    const stroke = { fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round' };
+    if (v.dashFrom !== undefined) {
+      const solid = pts.filter((p) => p.u <= v.dashFrom + 1e-9);
+      const dashed = pts.filter((p) => p.u >= (solid.length ? solid[solid.length - 1].u : v.dashFrom) - 1e-9);
+      svg.append(el('path', { d: `${side(solid, -1)}${side(solid, 1)}`, ...stroke, 'stroke-dasharray': v.dash }));
+      svg.append(el('path', { d: `${side(dashed, -1)}${side(dashed, 1)}`, ...stroke, 'stroke-dasharray': '4 3' }));
+    } else {
+      const wall = v.open ? `${side(pts, -1)}${side(pts, 1)}`
+        : [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+          ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)].join('');
+      svg.append(el('path', { d: wall, ...stroke, 'stroke-dasharray': v.dash }));
+    }
   });
   svg.append(el('text', { x: cx, y: H - 8, fill: color, 'font-size': fs(12), 'font-weight': 600, 'text-anchor': 'middle' }, `${label.split(':')[0]} ${Math.round(fill * 100)} %`));
 }
