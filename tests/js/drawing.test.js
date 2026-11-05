@@ -13,17 +13,17 @@ class Node {
 }
 globalThis.document = { createElementNS: (ns, name) => new Node(name), createElement: (name) => new Node(name) };
 
-const { drawTanks, drawElectrodes, drawCell, drawAccount, idealCell, lithiumAccount, IDEAL_ANODE, IDEAL_CATHODE } = await import('../../src/pytanks/js/index.js');
-const { drawBlendTanks, blendElectrode, lineU, IDEAL_SILICON, IDEAL_GRAPHITE } = await import('../../src/pytanks/js/index.js');
+const { drawTanks, drawElectrodes, drawCell, drawAccount, linearCell, lithiumAccount, LINEAR_ANODE, LINEAR_CATHODE } = await import('../../src/pytanks/js/index.js');
+const { drawBlendTanks, blendElectrode, lineU, LINEAR_SILICON, LINEAR_GRAPHITE } = await import('../../src/pytanks/js/index.js');
 
-const cell = idealCell({ qCath: 10, qAnode: 11, li: 10, vMin: 3.0, vMax: 4.2 });
+const cell = linearCell({ qCath: 10, qAnode: 11, li: 10, vMin: 3.0, vMax: 4.2 });
 
-test('ideal cell: Vmin and Vmax cut the window, cell voltage rises with lithium in the anode', () => {
+test('linear cell: Vmin and Vmax cut the window, cell voltage rises with lithium in the anode', () => {
   assert.ok(Math.abs(cell.vCell(cell.xMin) - 3.0) < 1e-6);
   assert.ok(Math.abs(cell.vCell(cell.xMax) - 4.2) < 1e-6 || cell.highLimit === 'cathode-empty');
   for (let x = cell.xLo; x < cell.xHi - 0.1; x += 0.5) assert.ok(cell.vCell(x + 0.1) > cell.vCell(x));
-  assert.equal(IDEAL_ANODE.full, 0);
-  assert.equal(IDEAL_CATHODE.empty, 4.25);
+  assert.equal(LINEAR_ANODE.full, 0);
+  assert.equal(LINEAR_CATHODE.empty, 4.25);
 });
 
 test('tanks: both walls, water and the cell voltage label', () => {
@@ -48,7 +48,7 @@ test('charts and lithium account draw an svg each', () => {
 });
 
 test('blend: two tanks share one level', () => {
-  const blend = blendElectrode([{ name: 'Silicon', share: 0.25, U: lineU(IDEAL_SILICON) }, { name: 'Graphite', share: 0.75, U: lineU(IDEAL_GRAPHITE) }]);
+  const blend = blendElectrode([{ name: 'Silicon', share: 0.25, U: lineU(LINEAR_SILICON) }, { name: 'Graphite', share: 0.75, U: lineU(LINEAR_GRAPHITE) }]);
   const box = new Node('div');
   drawBlendTanks(box, blend, 0.5);
   assert.ok(box.children[0].all('text').some((t) => t.textContent === `${blend.U(0.5).toFixed(2)} V`));
@@ -122,4 +122,33 @@ test('fit keeps long labels inside their room, never below the wide size', () =>
   setStyle({ profile: 'wide' });
   drawCell(new Node('div'), cell, cell.xMin, 12);
   assert.equal(fit(12, 'x'.repeat(200), 50, true), 12);
+});
+
+const { binodal, span90, uRegular, wRegular, KT, drawTankShapes, drawShapeCompare, drawInteractionCurve, drawInteractionTank } = await import('../../src/pytanks/js/index.js');
+
+test('shapes: ideal solid solution holds 90 % of its lithium within 2 kT ln 19 (about 151 mV)', () => {
+  assert.ok(Math.abs(span90(0) - 2 * KT * Math.log(19)) < 1e-9);
+  assert.ok(Math.abs(span90(0) - 0.1513) < 0.001);
+  // widest at half full, 1/(4 kT) per volt
+  assert.ok(Math.abs(wRegular(0.5) - 0.25 / KT) < 1e-9);
+  assert.ok(Math.abs(uRegular(0.5)) < 1e-12);
+});
+
+test('shapes: repulsion stretches the tank, attraction squeezes it, above 2 kT the material splits', () => {
+  assert.ok(span90(-10) > 0.6 && span90(-10) < 0.62);
+  assert.ok(span90(1.5) < span90(0));
+  assert.equal(binodal(2), null);
+  const xb = binodal(4.5);
+  assert.ok(xb > 0 && xb < 0.1);
+  // both phases at the same potential: the binodal point lies on U0
+  assert.ok(Math.abs(uRegular(xb, 4.5)) < 1e-9);
+});
+
+test('shapes: all figures draw', () => {
+  for (const draw of [(b) => drawTankShapes(b), (b) => drawInteractionCurve(b, 3), (b) => drawInteractionTank(b, 3), (b) => drawInteractionTank(b, -5),
+    (b) => drawShapeCompare(b, [{ name: 'test', color: '#fff', x: [0, 0.5, 1], u: [0.5, 0.2, 0.1] }])]) {
+    const box = new Node('div');
+    draw(box);
+    assert.ok(box.all('path').length >= 1);
+  }
 });
