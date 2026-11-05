@@ -14,6 +14,8 @@ export const KT = 0.025693; // kT/e at 25 °C [V]
 // material splits: in equilibrium both phases sit at U0 (plateau) between the binodal points xb and 1 - xb.
 export const uRegular = (x, omega = 0) => -KT * (Math.log(x / (1 - x)) + omega * (1 - 2 * x));
 export const wRegular = (x, omega = 0) => 1 / (KT * (1 / (x * (1 - x)) - 2 * omega));
+// Free energy of mixing per site in units of kT; mu = dg/dx. Double well (two minima) for omega > 2.
+export const gRegular = (x, omega = 0) => x * Math.log(x) + (1 - x) * Math.log(1 - x) + omega * x * (1 - x);
 
 // Binodal point xb < 0.5 (lithium-poor phase) for omega > 2, else null
 export function binodal(omega) {
@@ -65,7 +67,6 @@ function columns(container, { cols, uMin, uMax, k: kGiven, fitWidth, label, heig
   const y = (u) => top + ((u - uMin) / (uMax - uMin)) * height;
   const svg = svgRoot(container, W, H, label);
   svg.append(el('text', { x: left - 6, y: top - 12, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, 'mV'));
-  svg.append(el('text', { x: left, y: 14, fill: T.muted, 'font-size': fs(10) }, '↑ towards the ceiling (more lithium)'));
   for (const t of niceTicks(uMin, uMax, 5)) {
     svg.append(el('line', { x1: left, x2: W - 6, y1: y(t), y2: y(t), stroke: T.grid }));
     const mv = Math.round(t * 1000);
@@ -74,17 +75,11 @@ function columns(container, { cols, uMin, uMax, k: kGiven, fitWidth, label, heig
   }
   cols.forEach((c, i) => {
     const cx = left + colW * (i + 0.5);
-    let clipped = false;
     for (const part of c.parts) {
       // open: stop where the shape gets wider than the column (the horn keeps widening), instead of a straight wall
       const pts = part.pts.filter((p) => p.u >= uMin && p.u <= uMax && Number.isFinite(p.w) && p.w >= 0 && (!part.open || p.w * k <= cap));
-      if (part.open && pts.length < part.pts.filter((p) => p.u >= uMin && p.u <= uMax).length) clipped = true;
       if (pts.length < 2) continue;
-      const half = (p) => {
-        const w = p.w * k;
-        if (w > cap) clipped = true;
-        return Math.min(cap, Math.max(0.75, w)) / 2;
-      };
+      const half = (p) => Math.min(cap, Math.max(0.75, p.w * k)) / 2;
       const d = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - half(p)).toFixed(1)} ${y(p.u).toFixed(1)}`),
         ...[...pts].reverse().map((p) => `L${(cx + half(p)).toFixed(1)} ${y(p.u).toFixed(1)}`)];
       if (part.fill) svg.append(el('path', { d: `${d.join('')}Z`, fill: part.fill, stroke: 'none' }));
@@ -94,10 +89,6 @@ function columns(container, { cols, uMin, uMax, k: kGiven, fitWidth, label, heig
     if (c.basin) {
       // a plateau holds its share of lithium at one height: in true scale infinitely wide, drawn as a bar at cap
       svg.append(el('rect', { x: cx - cap / 2, y: y(c.basin.u) - 2.5, width: cap, height: 5, fill: c.color, rx: 1 }));
-      clipped = true;
-    }
-    if (clipped) {
-      svg.append(el('text', { x: cx + cap / 2, y: top + height + 12, fill: T.muted, 'font-size': fs(9), 'text-anchor': 'end' }, 'wider ↔'));
     }
     svg.append(el('text', { x: cx, y: H - 8, fill: c.color, 'font-size': fs(11), 'font-weight': 600, 'text-anchor': 'middle' }, c.name));
   });
@@ -192,5 +183,29 @@ export function drawInteractionTank(container, omega = 0) {
     uMin: U_TOOL[0], uMax: U_TOOL[1], k: 70 / (0.25 / KT), height: 250,
     note: xb === null ? null : `plateau holds ${Math.round(share * 100)} %`,
     cols: [{ name: omega === 0 ? 'ideal solid solution' : omega < 0 ? 'neighbours repel' : 'neighbours attract', color: T.cathode, parts, basin: xb === null ? null : { u: 0, share } }],
+  });
+}
+
+// Free energy per site (in kT) over the filling. For omega > 2 a double well: the common tangent (horizontal, the
+// curve is symmetric) touches both minima at the binodal points, and every filling in between is cheaper as a mix of
+// the two phases than as one evenly filled crystal.
+export function drawInteractionFreeEnergy(container, omega = 0) {
+  const xb = binodal(omega);
+  const xs = Array.from({ length: 401 }, (_, i) => 0.0005 + (i * 0.999) / 400);
+  const gs = xs.map((x) => gRegular(x, omega));
+  const lo = Math.min(...gs);
+  const hi = Math.max(...gs, 0);
+  const pad = 0.08 * Math.max(hi - lo, 0.05);
+  chart(container, {
+    label: `Free energy of a solid solution with interaction ${fmt(omega, 1)} kT between neighbouring lithium ions${xb === null ? ', one minimum' : ', a double well with two minima'}`,
+    xMax: 1, yMin: lo - pad, yMax: hi + pad, xTitle: 'filling x', yTitle: 'free energy [kT per site]', height: 250, xTicks: 5,
+    draw(p) {
+      p.line(xs.map((x, i) => [x, gs[i]]), { stroke: T.cathode });
+      if (xb !== null) {
+        const g = gRegular(xb, omega);
+        p.line([[xb, g], [1 - xb, g]], { stroke: T.warn, 'stroke-dasharray': '3 3', 'stroke-width': 1.5 });
+        p.label(0.5, g + pad * 0.6, 'two phases: common tangent', T.warn, 'middle');
+      }
+    },
   });
 }
