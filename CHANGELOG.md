@@ -2,6 +2,11 @@
 
 Versions follow [semantic versioning](https://semver.org/). Before 1.0 the interface can still change between minor versions.
 
+## 0.5.0 (2026-11)
+
+- `shapes.js`: free energy of the regular solution, `gRegular()` and `drawInteractionFreeEnergy()` (double well with the common tangent above 2 kT).
+- Tank-shape columns without the labels "towards the ceiling (more lithium)" and "wider ↔".
+
 ## 0.4.0 (2026-11)
 
 - **Breaking:** the tanks with a constant cross-section are called *linear*, not *ideal* ("ideal" means the ideal solution in thermodynamics, see `shapes.js`): `model/idealCell.js` → `model/linearCell.js`, `idealCell()` → `linearCell()`, `IDEAL_ANODE/CATHODE/SILICON/GRAPHITE` → `LINEAR_…`. No aliases for the old names.
