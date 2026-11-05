@@ -18,6 +18,15 @@ export function interp(xs, ys, x) {
   return ys[ys.length - 1];
 }
 
+// Lithiation curve with the extrapolation beyond the measured window (v.ext, cathodes above the upper cut-off):
+// { x, u, ext: { x, u } | null }. x is the filling of the measured window (ext.x < 0 = more lithium out than measured);
+// the measured part starts where the extrapolation joins (ext.join).
+export function extended(v, key = 'uIn') {
+  if (!v.ext || key !== 'uIn') return { x: v.x, u: v[key], ext: null };
+  const keep = v.x.map((x) => x >= v.ext.join - 1e-9);
+  return { x: v.x.filter((_, i) => keep[i]), u: v[key].filter((_, i) => keep[i]), ext: { x: v.ext.x, u: v.ext.u } };
+}
+
 /* Tank (hangs from the ceiling, depth = potential) ------------------------------------------- */
 // Width ~ dQ/dU, smoothed with a bell of width sigma (V). Each curve piece (x_j, u_j) -> (x_j+1, u_j+1) spreads its
 // lithium evenly over its potential range; folded with the bell this gives a smooth width without spikes.
@@ -115,18 +124,21 @@ export function drawNmcAll(container, m, current) {
   use(container);
   chart(container, {
     label: 'All NMC and NCA curves on one axis: the full end is fixed at the theoretical capacity, only the start moves',
-    xMin: 0, xMax: m.qTheo, yMin: 2.9, yMax: 4.4, xTitle: 'lithium in the material [mAh/g]', yTitle: 'potential vs Li/Li⁺ [V]', height: 280,
+    xMin: 0, xMax: m.qTheo, yMin: 2.9, yMax: 4.7, xTitle: 'lithium in the material [mAh/g]', yTitle: 'potential vs Li/Li⁺ [V]', height: 280,
     draw(p) {
       p.hline(4.3, 'upper limit 4.3 V', T.warn);
-      p.vline(m.qTheo, 2.9, 4.4, T.muted);
-      m.variants.forEach((v, i) => {
-        if (i === current) return;
-        p.line(v.x.map((x, j) => [m.qTheo - v.q + x * v.q, v.uIn[j]]), { stroke: NI_COLORS[i], opacity: 0.8, 'stroke-width': 1.75 });
-      });
-      const v = m.variants[current];
-      p.line(v.x.map((x, j) => [m.qTheo - v.q + x * v.q, v.uIn[j]]), { stroke: NI_COLORS[current], 'stroke-width': 3 });
-      // Legend top right (no curve runs there)
-      m.variants.forEach((vv, i) => p.label(m.qTheo - 8, 4.2 - i * 0.075, vv.label, NI_COLORS[i], 'end'));
+      p.vline(m.qTheo, 2.9, 4.7, T.muted);
+      const line = (v, attrs) => {
+        const c = extended(v);
+        const at = (x) => m.qTheo - v.q + x * v.q;
+        p.line(c.x.map((x, j) => [at(x), c.u[j]]), attrs);
+        if (c.ext) p.line(c.ext.x.map((x, j) => [at(x), c.ext.u[j]]), { ...attrs, 'stroke-dasharray': '4 3' });
+      };
+      m.variants.forEach((v, i) => { if (i !== current) line(v, { stroke: NI_COLORS[i], opacity: 0.8, 'stroke-width': 1.75 }); });
+      line(m.variants[current], { stroke: NI_COLORS[current], 'stroke-width': 3 });
+      // Legend bottom left (no curve runs there)
+      m.variants.forEach((vv, i) => p.label(8, 3.0 + (m.variants.length - 1 - i) * 0.075, vv.label, NI_COLORS[i], 'start'));
+      p.label(m.qTheo - 8, 4.62, 'dashed: extrapolated', T.muted, 'end');
     },
   });
 }
@@ -170,17 +182,27 @@ export function drawShelf(container, data, current, nav) {
       g.append(el('rect', { x: cx - slotW / 2, y: top - 2, width: slotW, height: 6, fill: active ? T.cell : 'none', stroke: T.cell, 'stroke-width': 1 }));
     } else {
       const v = m.variants[m.defaultVariant ?? 0];
-      // Only the used window: cut the first and last percent of the fill (steep ends = long thin tails)
+      // Only the used window: cut the first and last percent of the fill (steep ends = long thin tails). Cathodes
+      // with an extrapolation (v.ext) run on up to its end (dashed above the measured cut-off).
       const at = (x) => v.uIn[Math.round(x * (v.uIn.length - 1))];
+      const c = extended(v);
       const lo = at(0.95);
-      const hi = at(0.04);
-      const pts = profile(v.x, v.uIn, v.q, Math.max(0, lo), hi, 200, 0.012);
+      const hi = c.ext ? c.ext.u[0] : at(0.04);
+      const xs = c.ext ? [...c.ext.x, ...c.x] : v.x;
+      const us = c.ext ? [...c.ext.u, ...c.u] : v.uIn;
+      const pts = profile(xs, us, v.q, Math.max(0, lo), hi, 200, 0.012);
       ext = [y(Math.max(0, lo)) - 4, y(hi) + 4];
       const sc = widthScale(pts.map((p) => p.w), slotW, 3);
       const w = (p) => sc(p.w);
-      const d = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-        ...[...pts].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), 'Z'];
-      g.append(el('path', { d: d.join(''), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: color, 'stroke-width': 1.5 }));
+      const path = (pp, close) => [...pp.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+        ...[...pp].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), close ? 'Z' : ''].join('');
+      const uJoin = c.ext ? c.ext.u[c.ext.u.length - 1] : Infinity;
+      const meas = pts.filter((p) => p.u <= uJoin + 1e-9);
+      g.append(el('path', { d: path(meas, true), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: color, 'stroke-width': 1.5 }));
+      if (c.ext) {
+        const ex = pts.filter((p) => p.u >= uJoin - 1e-9);
+        g.append(el('path', { d: path(ex, false), fill: color, 'fill-opacity': active ? 0.12 : 0, stroke: color, 'stroke-width': 1.25, 'stroke-dasharray': '3 2' }));
+      }
     }
     g.append(el('text', { x: cx, y: H - 30 + 2, fill: color, 'font-size': fs(10), 'font-weight': 700, 'text-anchor': 'middle' }, SHORT[slug]));
     g.append(el('text', { x: cx, y: H - 18, fill: T.muted, 'font-size': fs(9), 'text-anchor': 'middle' }, m.q));
