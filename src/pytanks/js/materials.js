@@ -199,23 +199,27 @@ export function drawShelf(container, data, current, nav) {
       // with an extrapolation (v.ext) run on up to its end (dashed above the measured cut-off).
       const at = (x) => v.uIn[Math.round(x * (v.uIn.length - 1))];
       const c = extended(v);
-      // the ends are closed in the data (ln tails), so only the last percent is cut
-      const lo = at(0.99);
-      const hi = c.ext ? c.ext.u[0] : at(0.01);
+      // the ends are closed in the data (ln tails): draw the whole curve, the tank tapers to a line at both ends
+      const lo = at(1);
+      const hi = c.ext ? c.ext.u[0] : at(0);
       const xs = c.ext ? [...c.ext.x, ...c.x] : v.x;
       const us = c.ext ? [...c.ext.u, ...c.u] : v.uIn;
       const pts = profile(xs, us, v.q, Math.max(0, lo), hi, 200, 0.012);
       ext = [y(Math.max(0, lo)) - 4, y(hi) + 4];
-      const sc = widthScale(pts.map((p) => p.w), slotW, 3);
+      const sc = widthScale(pts.map((p) => p.w), slotW, 1);
       const w = (p) => sc(p.w);
-      const path = (pp, close) => [...pp.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-        ...[...pp].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), close ? 'Z' : ''].join('');
+      const area = (pp) => [...pp.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+        ...[...pp].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), 'Z'].join('');
+      // walls as two side lines: no lid across the ends or across the join to the extrapolation
+      const sides = (pp) => [-1, 1].map((sg) => pp.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sg * w(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('')).join('');
       const uJoin = c.ext ? c.ext.u[c.ext.u.length - 1] : Infinity;
       const meas = pts.filter((p) => p.u <= uJoin + 1e-9);
-      g.append(el('path', { d: path(meas, true), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: color, 'stroke-width': 1.5 }));
+      g.append(el('path', { d: area(meas), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: 'none' }));
+      g.append(el('path', { d: sides(meas), fill: 'none', stroke: color, 'stroke-width': 1.5 }));
       if (c.ext) {
-        const ex = pts.filter((p) => p.u >= uJoin - 1e-9);
-        g.append(el('path', { d: path(ex, false), fill: color, 'fill-opacity': active ? 0.12 : 0, stroke: color, 'stroke-width': 1.25, 'stroke-dasharray': '3 2' }));
+        const ex = pts.filter((p) => p.u >= meas[meas.length - 1].u - 1e-9);
+        g.append(el('path', { d: area(ex), fill: color, 'fill-opacity': active ? 0.12 : 0, stroke: 'none' }));
+        g.append(el('path', { d: sides(ex), fill: 'none', stroke: color, 'stroke-width': 1.25, 'stroke-dasharray': '3 2' }));
       }
     }
     g.append(el('text', { x: cx, y: H - 30 + 2, fill: color, 'font-size': fs(10), 'font-weight': 700, 'text-anchor': 'middle' }, SHORT[slug]));
