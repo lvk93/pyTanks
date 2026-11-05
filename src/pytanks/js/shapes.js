@@ -122,7 +122,7 @@ export function drawTankShapes(container, { span = 0.3 } = {}) {
     uMin, uMax, k,
     cols: [
       { name: 'linear', color: T.tank, parts: [{ pts: linear }] },
-      { name: 'dilute solution', color: T.water, parts: [{ pts: horn(-2 * KT * Math.LN10), open: true }] },
+      { name: 'ideal solution', color: T.water, parts: [{ pts: horn(-2 * KT * Math.LN10), open: true }] },
       { name: 'solid solution', color: T.anode, parts: [{ pts: horn(0), open: true, dash: '4 4', color: T.water, opacity: 0.7 }, { pts: solid }] },
     ],
   });
