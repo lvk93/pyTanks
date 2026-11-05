@@ -110,10 +110,13 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
       svg.append(el('line', { x1: 40, x2: W - 8, y1: y(uS), y2: y(uS), stroke: T.muted, 'stroke-dasharray': '3 3' }));
       svg.append(el('text', { x: 44, y: y(uS) - 5, fill: T.cell, 'font-size': fs(12), 'font-weight': 700, ...halo() }, `${fmt(uS)} V`));
     }
-    // Wall open at the top (towards the ceiling), closed at the bottom: left side down, bottom, right side up
-    const wall = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-      ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)];
-    svg.append(el('path', { d: wall.join(''), fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-dasharray': v.dash }));
+    // Wall open at the top (towards the ceiling), closed at the bottom: left side down, bottom, right side up.
+    // v.open: no bottom (the curve goes on beyond the view or the measurement), both sides as separate lines.
+    const side = (sgn) => pts.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sgn * W_(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('');
+    const wall = v.open ? `${side(-1)}${side(1)}`
+      : [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+        ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)].join('');
+    svg.append(el('path', { d: wall, fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-dasharray': v.dash }));
   });
   svg.append(el('text', { x: cx, y: H - 8, fill: color, 'font-size': fs(12), 'font-weight': 600, 'text-anchor': 'middle' }, `${label.split(':')[0]} ${Math.round(fill * 100)} %`));
 }
@@ -186,8 +189,9 @@ export function drawShelf(container, data, current, nav) {
       // with an extrapolation (v.ext) run on up to its end (dashed above the measured cut-off).
       const at = (x) => v.uIn[Math.round(x * (v.uIn.length - 1))];
       const c = extended(v);
-      const lo = at(0.95);
-      const hi = c.ext ? c.ext.u[0] : at(0.04);
+      // the ends are closed in the data (ln tails), so only the last percent is cut
+      const lo = at(0.99);
+      const hi = c.ext ? c.ext.u[0] : at(0.01);
       const xs = c.ext ? [...c.ext.x, ...c.x] : v.x;
       const us = c.ext ? [...c.ext.u, ...c.u] : v.uIn;
       const pts = profile(xs, us, v.q, Math.max(0, lo), hi, 200, 0.012);
