@@ -1,0 +1,50 @@
+# On every push to main: create the tag and GitHub release for the version in pyproject.toml,
+# unless that tag already exists. Release text = the version's section in CHANGELOG.md.
+# Also checks that pyproject.toml, package.json and CITATION.cff carry the same version.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read version
+        id: v
+        run: |
+          py=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          js=$(node -p "require('./package.json').version")
+          cff=$(sed -n 's/^version: *//p' CITATION.cff | tr -d '"')
+          if [ "$py" != "$js" ] || [ "$py" != "$cff" ]; then
+            echo "::error::Versions differ: pyproject.toml $py, package.json $js, CITATION.cff $cff"
+            exit 1
+          fi
+          echo "version=$py" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release if new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          tag="v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} already exists, nothing to do."
+            exit 0
+          fi
+          awk -v v="${VERSION}" 'index($0, "## " v " ") == 1 || $0 == "## " v {f = 1; next} f && /^## / {exit} f' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::No section '## ${VERSION}' in CHANGELOG.md"
+            exit 1
+          fi
+          gh release create "${tag}" --target "${GITHUB_SHA}" --title "${tag}" --notes-file notes.md
