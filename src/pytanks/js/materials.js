@@ -482,3 +482,70 @@ export function drawSCurve(container) {
     },
   });
 }
+
+// Graphite staging: one particle as a stack of carbon layers, lithium goes in from the left edge between them.
+// Simplified after Rüdorff–Hofmann: first every fourth gap fills (stage 4), then every second (stage 2, LiC12), then
+// every gap (stage 1, LiC6). The first step is drawn as scattered lithium, the two later ones as a front moving in
+// from the edge (two phases side by side). Real graphite also passes through stages 3 and 2L; this is a sketch.
+// The bar below uses the same filling axis as the curve (0 = empty, 1 = LiC6).
+export const STAGES = [
+  { to: 0.25, every: 4, label: 'every 4th gap', name: 'stage 4' },
+  { to: 0.5, every: 2, label: 'every 2nd gap', name: 'stage 2 · LiC₁₂' },
+  { to: 1, every: 1, label: 'every gap', name: 'stage 1 · LiC₆' },
+];
+export function drawStaging(container, fill) {
+  use(container);
+  const f = Math.min(1, Math.max(0, fill));
+  const W = 360;
+  const H = 286;
+  const svg = svgRoot(container, W, H, 'One graphite particle as a stack of carbon layers. Lithium goes in from the edge: first into every fourth gap, then every second, then every gap.');
+  const nGap = 12;
+  const nSite = 18;
+  const x0 = 62;
+  const x1 = 344;
+  const yTop = 46;
+  const gap = 13.5;
+  const dx = (x1 - x0) / nSite;
+  // which step fills which gap: 0 = every 4th, 1 = the rest of every 2nd, 2 = the remaining ones
+  const step = (g) => (g % 4 === 0 ? 0 : g % 2 === 0 ? 1 : 2);
+  const from = [0, STAGES[0].to, STAGES[1].to];
+  const active = f >= 0.999 ? -1 : f < STAGES[0].to ? 0 : f < STAGES[1].to ? 1 : 2;
+  const hash = (g, i) => (((g * 37 + i * 61 + 11) * 2654435761) % 1000) / 1000;
+  for (let g = 0; g < nGap; g += 1) {
+    const s = step(g);
+    const y = yTop + gap * (g + 0.5);
+    if (s === active) svg.append(el('rect', { x: x0, y: y - gap / 2, width: x1 - x0, height: gap, fill: T.windowStrong }));
+    const t = Math.min(1, Math.max(0, (f - from[s]) / (STAGES[s].to - from[s])));
+    for (let i = 0; i < nSite; i += 1) {
+      const on = s === 0 && f < STAGES[0].to ? hash(g, i) < t : (i + 0.5) / nSite <= t + 1e-9;
+      if (on) svg.append(el('circle', { cx: x0 + dx * (i + 0.5), cy: y, r: 3.2, fill: T.water }));
+    }
+  }
+  // carbon layers
+  for (let g = 0; g <= nGap; g += 1) {
+    const y = yTop + gap * g;
+    svg.append(el('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: T.anode, 'stroke-width': 2, opacity: 0.85 }));
+  }
+  // lithium comes in from the edge
+  const yMid = yTop + (gap * nGap) / 2;
+  svg.append(el('path', { d: `M${x0 - 40} ${yMid}H${x0 - 8}m-7 -6l7 6l-7 6`, fill: 'none', stroke: T.water, 'stroke-width': 2.5, 'stroke-linejoin': 'round' }));
+  svg.append(el('text', { x: x0 - 28, y: yMid - 12, fill: T.water, 'font-size': fs(11), 'text-anchor': 'middle' }, 'Li⁺'));
+  svg.append(el('text', { x: x1, y: yTop + gap * nGap + 14, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'end' }, 'green: carbon layers'));
+  // bar on the filling axis of the curve: three steps
+  const yb = 246;
+  const hb = 10;
+  const bx = (v) => x0 + v * (x1 - x0);
+  svg.append(el('rect', { x: x0, y: yb, width: bx(f) - x0, height: hb, fill: T.water, opacity: 0.85 }));
+  STAGES.forEach((st, k) => {
+    const a = bx(from[k]);
+    const b = bx(st.to);
+    svg.append(el('rect', { x: a, y: yb, width: b - a, height: hb, fill: 'none', stroke: k === active ? T.cell : T.tank, 'stroke-width': k === active ? 2 : 1.25 }));
+    svg.append(el('text', { x: (a + b) / 2, y: yb + hb + 14, fill: k === active ? T.cell : T.muted, 'font-size': fit(10, st.label, b - a - 2), 'text-anchor': 'middle', 'font-weight': k === active ? 700 : 400 }, st.label));
+  });
+  svg.append(el('text', { x: x0 - 8, y: yb + hb - 1, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'end' }, 'empty'));
+  const phase = active === -1 ? 'every gap full: LiC₆'
+    : active === 0 ? 'every 4th gap takes lithium (stage 4)'
+      : active === 1 ? 'every 2nd gap fills from the edge (stage 2)' : 'the last gaps fill from the edge (stage 1)';
+  const head = `${Math.round(f * 100)} % · ${phase}`;
+  svg.append(el('text', { x: 12, y: 22, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
+}
