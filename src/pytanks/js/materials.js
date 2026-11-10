@@ -543,7 +543,10 @@ export function drawStaging(container, fill) {
     svg.append(el('text', { x: (a + b) / 2, y: yb + hb + 14, fill: k === active ? T.cell : T.muted, 'font-size': fit(10, st.label, b - a - 2), 'text-anchor': 'middle', 'font-weight': k === active ? 700 : 400 }, st.label));
   });
   svg.append(el('text', { x: x0 - 8, y: yb + hb - 1, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'end' }, 'empty'));
+  const near = (v) => Math.abs(f - v) < 0.006;
   const phase = active === -1 ? 'every gap full: LiC₆'
+    : near(0.25) ? 'every 4th gap full (stage 4)'
+    : near(0.5) ? 'every 2nd gap full: LiC₁₂ (stage 2)'
     : active === 0 ? 'every 4th gap takes lithium (stage 4)'
       : active === 1 ? 'every 2nd gap fills from the edge (stage 2)' : 'the last gaps fill from the edge (stage 1)';
   const head = `${Math.round(f * 100)} % · ${phase}`;
