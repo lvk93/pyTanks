@@ -489,8 +489,8 @@ export function drawSCurve(container) {
 // from the edge (two phases side by side). Real graphite also passes through stages 3 and 2L; this is a sketch.
 // The bar below uses the same filling axis as the curve (0 = empty, 1 = LiC6).
 export const STAGES = [
-  { to: 0.25, every: 4, label: 'every 4th gap', name: 'stage 4' },
-  { to: 0.5, every: 2, label: 'every 2nd gap', name: 'stage 2 · LiC₁₂' },
+  { to: 0.25, every: 4, label: 'every 4th', name: 'stage 4' },
+  { to: 0.5, every: 2, label: 'every 2nd', name: 'stage 2 · LiC₁₂' },
   { to: 1, every: 1, label: 'every gap', name: 'stage 1 · LiC₆' },
 ];
 export function drawStaging(container, fill) {
