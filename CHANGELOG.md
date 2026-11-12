@@ -6,6 +6,9 @@ Versions follow [semantic versioning](https://semver.org/). Before 1.0 the inter
 
 - `shapes.js`: free energy of the regular solution, `gRegular()` and `drawInteractionFreeEnergy()` (double well with the common tangent above 2 kT).
 - Tank-shape columns without the labels "towards the ceiling (more lithium)" and "wider ↔".
+- `materials.js`: graphite staging drawing `drawStaging()` (carbon layers; every 4th, every 2nd, every gap filled).
+- `drawWeir()`: the in-between states on the plateau (water spilling over, reservoir partly full) are drawn dashed in the warning colour, because a small particle does not stay there; once converted, the left neck is full up to its roof.
+- `drawSCurve(container, { parts })`: draw only the S-curve (`'curve'`), only its dQ/dV (`'dqdv'`) or both (default); labels "unstable (spinodal region)" and "one particle, filled evenly".
 
 ## 0.4.0 (2026-11)
 

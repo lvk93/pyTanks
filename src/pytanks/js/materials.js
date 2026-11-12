@@ -300,16 +300,21 @@ export function drawWeir(container, fill, slug = 'lfp') {
   // 1) left neck
   const l = Math.min(1, fill / WEIR.left);
   water(xL, yLeftBottom - l * hN, wN, l * hN);
-  // 2) reservoir; on the plateau a film runs through the gutter and falls into the reservoir
+  // 2) reservoir; on the plateau a film runs through the gutter and falls into the reservoir. For a single small
+  //    particle these in-between states are unstable (it tips over as a whole), so they are drawn in warning colour,
+  //    dashed; once the particle has converted, the full reservoir is ordinary water again
   const r = fill <= WEIR.left ? 0 : Math.min(1, (fill - WEIR.left) / (WEIR.right - WEIR.left));
-  water(xR0, yResBottom - r * hRes, xR - xR0, r * hRes);
-  if (r > 0 && r < 1) {
-    water(xC, yCrest - 2, xR0 - xC + 2, 2);
-    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, fill: T.water, opacity: 0.85 }));
+  const unstable = r > 0 && r < 1;
+  const spill = unstable ? { fill: T.warn, 'fill-opacity': 0.45, stroke: T.warn, 'stroke-width': 2, 'stroke-dasharray': '6 4' } : { fill: T.water, opacity: 0.85 };
+  if (r > 0) svg.append(el('rect', { x: xR0, y: yResBottom - r * hRes, width: xR - xR0, height: r * hRes, ...spill }));
+  if (unstable) {
+    svg.append(el('rect', { x: xC, y: yCrest - 2, width: xR0 - xC + 2, height: 2, fill: T.warn, opacity: 0.6 }));
+    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, fill: T.warn, opacity: 0.6 }));
   }
-  // 3) right neck (the gutter is then full too)
+  // 3) right neck; the gutter and the top of the left neck (up to its roof) are then full too
   if (fill > WEIR.right) {
     const t = (fill - WEIR.right) / (1 - WEIR.right);
+    water(xL, yCrest - gut, wN, gut);
     water(xC, yCrest - gut, xR0 - xC, gut);
     water(xR0, yCrest - t * hN, wN, t * hN);
   }
@@ -326,7 +331,7 @@ export function drawWeir(container, fill, slug = 'lfp') {
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 44, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `reservoir: ${ph.empty} → ${ph.full}`));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 58, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
   const phase = fill <= WEIR.left ? 'left tank: empty phase takes up lithium'
-    : fill <= WEIR.right ? 'on the plateau: spilling into the reservoir' : 'right tank: full phase gets fuller';
+    : fill <= WEIR.right ? 'tipping over: a small particle won\'t stay here' : 'right tank: full phase gets fuller';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
   svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
 }
@@ -441,14 +446,16 @@ export function regularSolution(omegaRT = 4.5, U0 = 3.42) {
   return { xs, U, dQdU, U0, spin: [0.5 - d, 0.5 + d] };
 }
 
-export function drawSCurve(container) {
+export function drawSCurve(container, { parts = 'curve dqdv' } = {}) {
   use(container);
   const s = regularSolution();
   const [yMin, yMax] = [3.34, 3.5]; // everything of interest lies between the poles (about 3.38 and 3.46 V)
+  // parts: 'curve' (S-curve against the plateau), 'dqdv' (its dQ/dV) or both, separated by a space
+  const want = new Set(String(parts).split(/[\s,]+/).filter(Boolean));
   const top = document.createElement('div');
   const bottom = document.createElement('div');
-  container.replaceChildren(top, bottom);
-  chart(top, {
+  container.replaceChildren(...[want.has('curve') && top, want.has('dqdv') && bottom].filter(Boolean));
+  if (want.has('curve')) chart(top, {
     label: 'S-shaped potential of a homogeneous LFP particle (regular solution model) and the flat plateau',
     xMax: 1, yMin, yMax, xTitle: 'filling x', yTitle: 'potential vs Li/Li⁺ [V]', height: 220,
     draw(p) {
@@ -457,10 +464,11 @@ export function drawSCurve(container) {
       p.line(s.xs.map((x, i) => [x, s.U[i]]), { stroke: T.cathode });
       // left, above the line: there the curve lies below the plateau, the label does not cross it
       p.label(0.05, s.U0 + 0.006, 'plateau (both phases)', T.water);
-      p.label(0.5, 3.49, 'spinodal region', T.warn, 'middle');
-      p.label(0.04, 3.35, 'evenly filled crystal', T.cathode);
+      p.label(0.5, 3.49, 'unstable (spinodal region)', T.warn, 'middle');
+      p.label(0.04, 3.35, 'one particle, filled evenly', T.cathode);
     },
   });
+  if (!want.has('dqdv')) return;
   // like a datasheet: voltage up, dQ/dV to the right; the two normal branches white, the negative branch in warning colour
   const iA = s.xs.findIndex((x) => x >= s.spin[0]);
   const iB = s.xs.findIndex((x) => x >= s.spin[1]);
