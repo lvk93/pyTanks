@@ -130,8 +130,8 @@ export function drawTankShapes(container, { span = 0.3 } = {}) {
 
 /* Figure: the ideal solid solution against measured curves, same capacity, true width ------------------------ */
 // materials: [{ name, color, x, u }] with x = filling 0..1 (more lithium = lower u). Potentials relative to u at x = 0.5.
-export function drawShapeCompare(container, materials) {
-  const [uMin, uMax] = [-0.6, 0.6];
+export function drawShapeCompare(container, materials, { range = [-0.6, 0.6] } = {}) {
+  const [uMin, uMax] = range;
   const ideal = outline((x) => uRegular(x), (x) => wRegular(x));
   const cols = materials.map((m) => {
     const u0 = interp(m.x, m.u, 0.5);
