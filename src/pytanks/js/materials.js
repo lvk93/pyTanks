@@ -18,6 +18,15 @@ export function interp(xs, ys, x) {
   return ys[ys.length - 1];
 }
 
+// Lithiation curve with the extrapolation beyond the measured window (v.ext, cathodes above the upper cut-off):
+// { x, u, ext: { x, u } | null }. x is the filling of the measured window (ext.x < 0 = more lithium out than measured);
+// the measured part starts where the extrapolation joins (ext.join).
+export function extended(v, key = 'uIn') {
+  if (!v.ext || key !== 'uIn') return { x: v.x, u: v[key], ext: null };
+  const keep = v.x.map((x) => x >= v.ext.join - 1e-9);
+  return { x: v.x.filter((_, i) => keep[i]), u: v[key].filter((_, i) => keep[i]), ext: { x: v.ext.x, u: v.ext.u } };
+}
+
 /* Tank (hangs from the ceiling, depth = potential) ------------------------------------------- */
 // Width ~ dQ/dU, smoothed with a bell of width sigma (V). Each curve piece (x_j, u_j) -> (x_j+1, u_j+1) spreads its
 // lithium evenly over its potential range; folded with the bell this gives a smooth width without spikes.
@@ -79,7 +88,7 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
     svg.append(el('line', { x1: 40, x2: W - 8, y1: y(t), y2: y(t), stroke: T.grid }));
     // 0 V is already written at the ceiling bar (and would be hidden below it)
     if (ceiling && t === 0) continue;
-    svg.append(el('text', { x: 34, y: y(t), fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, `${t} V`));
+    svg.append(el('text', { x: 34, y: y(t), fill: T.muted, 'font-size': fit(10, `${t} V`, 32), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, `${t} V`));
   }
   const cap = 230;
   const cx = 200;
@@ -101,10 +110,23 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
       svg.append(el('line', { x1: 40, x2: W - 8, y1: y(uS), y2: y(uS), stroke: T.muted, 'stroke-dasharray': '3 3' }));
       svg.append(el('text', { x: 44, y: y(uS) - 5, fill: T.cell, 'font-size': fs(12), 'font-weight': 700, ...halo() }, `${fmt(uS)} V`));
     }
-    // Wall open at the top (towards the ceiling), closed at the bottom: left side down, bottom, right side up
-    const wall = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-      ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)];
-    svg.append(el('path', { d: wall.join(''), fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-dasharray': v.dash }));
+    // Wall open at the top (towards the ceiling), closed at the bottom: left side down, bottom, right side up.
+    // v.open: no bottom (the curve goes on beyond the view or the measurement), both sides as separate lines.
+    // v.dashFrom: from this potential on (deeper) the wall is dashed, e.g. an extrapolation beyond the measurement;
+    // one outline, so the width runs on smoothly across the join.
+    const side = (pp, sgn) => pp.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sgn * W_(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('');
+    const stroke = { fill: 'none', stroke: v.color ?? color, 'stroke-width': 2.5, 'stroke-linejoin': 'round' };
+    if (v.dashFrom !== undefined) {
+      const solid = pts.filter((p) => p.u <= v.dashFrom + 1e-9);
+      const dashed = pts.filter((p) => p.u >= (solid.length ? solid[solid.length - 1].u : v.dashFrom) - 1e-9);
+      svg.append(el('path', { d: `${side(solid, -1)}${side(solid, 1)}`, ...stroke, 'stroke-dasharray': v.dash }));
+      svg.append(el('path', { d: `${side(dashed, -1)}${side(dashed, 1)}`, ...stroke, 'stroke-dasharray': '4 3' }));
+    } else {
+      const wall = v.open ? `${side(pts, -1)}${side(pts, 1)}`
+        : [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+          ...[...pts].reverse().map((p) => `L${(cx + W_(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`)].join('');
+      svg.append(el('path', { d: wall, ...stroke, 'stroke-dasharray': v.dash }));
+    }
   });
   svg.append(el('text', { x: cx, y: H - 8, fill: color, 'font-size': fs(12), 'font-weight': 600, 'text-anchor': 'middle' }, `${label.split(':')[0]} ${Math.round(fill * 100)} %`));
 }
@@ -112,21 +134,27 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
 // All NMC/NCA curves on one axis: full end fixed at the theoretical capacity, only the start and the shape change
 const NI_COLORS = ['#fde3a7', '#f8c471', '#f5b041', '#f39c12', '#e67e22', '#ff8a80'];
 export function drawNmcAll(container, m, current) {
-  use(container);
+  const { profile: prof } = use(container);
+  const plotH = Math.round(280 * prof.chart);
   chart(container, {
     label: 'All NMC and NCA curves on one axis: the full end is fixed at the theoretical capacity, only the start moves',
-    xMin: 0, xMax: m.qTheo, yMin: 2.9, yMax: 4.4, xTitle: 'lithium in the material [mAh/g]', yTitle: 'potential vs Li/Li⁺ [V]', height: 280,
+    xMin: 0, xMax: m.qTheo, yMin: 2.9, yMax: 4.7, xTitle: 'lithium in the material [mAh/g]', yTitle: 'potential vs Li/Li⁺ [V]', height: 280,
     draw(p) {
       p.hline(4.3, 'upper limit 4.3 V', T.warn);
-      p.vline(m.qTheo, 2.9, 4.4, T.muted);
-      m.variants.forEach((v, i) => {
-        if (i === current) return;
-        p.line(v.x.map((x, j) => [m.qTheo - v.q + x * v.q, v.uIn[j]]), { stroke: NI_COLORS[i], opacity: 0.8, 'stroke-width': 1.75 });
-      });
-      const v = m.variants[current];
-      p.line(v.x.map((x, j) => [m.qTheo - v.q + x * v.q, v.uIn[j]]), { stroke: NI_COLORS[current], 'stroke-width': 3 });
-      // Legend top right (no curve runs there)
-      m.variants.forEach((vv, i) => p.label(m.qTheo - 8, 4.2 - i * 0.075, vv.label, NI_COLORS[i], 'end'));
+      p.vline(m.qTheo, 2.9, 4.7, T.muted);
+      const line = (v, attrs) => {
+        const c = extended(v);
+        const at = (x) => m.qTheo - v.q + x * v.q;
+        p.line(c.x.map((x, j) => [at(x), c.u[j]]), attrs);
+        if (c.ext) p.line(c.ext.x.map((x, j) => [at(x), c.ext.u[j]]), { ...attrs, 'stroke-dasharray': '4 3' });
+      };
+      m.variants.forEach((v, i) => { if (i !== current) line(v, { stroke: NI_COLORS[i], opacity: 0.8, 'stroke-width': 1.75 }); });
+      line(m.variants[current], { stroke: NI_COLORS[current], 'stroke-width': 3 });
+      // Legend bottom left (no curve runs there): two columns of three, row height from the font size
+      const rowV = (fs(11) * 1.3 * (4.7 - 2.9)) / (plotH - 52);
+      const rows = Math.ceil(m.variants.length / 2);
+      m.variants.forEach((vv, i) => p.label(8 + Math.floor(i / rows) * 72, 3.02 + (rows - 1 - (i % rows)) * rowV, vv.label, NI_COLORS[i], 'start'));
+      p.label(m.qTheo - 8, 4.62, 'dashed: extrapolated', T.muted, 'end');
     },
   });
 }
@@ -170,24 +198,40 @@ export function drawShelf(container, data, current, nav) {
       g.append(el('rect', { x: cx - slotW / 2, y: top - 2, width: slotW, height: 6, fill: active ? T.cell : 'none', stroke: T.cell, 'stroke-width': 1 }));
     } else {
       const v = m.variants[m.defaultVariant ?? 0];
-      // Only the used window: cut the first and last percent of the fill (steep ends = long thin tails)
+      // Only the used window: cut the first and last percent of the fill (steep ends = long thin tails). Cathodes
+      // with an extrapolation (v.ext) run on up to its end (dashed above the measured cut-off).
       const at = (x) => v.uIn[Math.round(x * (v.uIn.length - 1))];
-      const lo = at(0.95);
-      const hi = at(0.04);
-      const pts = profile(v.x, v.uIn, v.q, Math.max(0, lo), hi, 200, 0.012);
+      const c = extended(v);
+      // the ends are closed in the data (ln tails): draw the whole curve, the tank tapers to a line at both ends
+      const lo = at(1);
+      const hi = c.ext ? c.ext.u[0] : at(0);
+      const xs = c.ext ? [...c.ext.x, ...c.x] : v.x;
+      const us = c.ext ? [...c.ext.u, ...c.u] : v.uIn;
+      const pts = profile(xs, us, v.q, Math.max(0, lo), hi, 200, 0.012);
       ext = [y(Math.max(0, lo)) - 4, y(hi) + 4];
-      const sc = widthScale(pts.map((p) => p.w), slotW, 3);
+      const sc = widthScale(pts.map((p) => p.w), slotW, 1);
       const w = (p) => sc(p.w);
-      const d = [...pts.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
-        ...[...pts].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), 'Z'];
-      g.append(el('path', { d: d.join(''), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: color, 'stroke-width': 1.5 }));
+      const area = (pp) => [...pp.map((p, j) => `${j ? 'L' : 'M'}${(cx - w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`),
+        ...[...pp].reverse().map((p) => `L${(cx + w(p) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`), 'Z'].join('');
+      // walls as two side lines: no lid across the ends or across the join to the extrapolation
+      const sides = (pp) => [-1, 1].map((sg) => pp.map((p, j) => `${j ? 'L' : 'M'}${(cx + (sg * w(p)) / 2).toFixed(1)} ${y(p.u).toFixed(1)}`).join('')).join('');
+      const uJoin = c.ext ? c.ext.u[c.ext.u.length - 1] : Infinity;
+      const meas = pts.filter((p) => p.u <= uJoin + 1e-9);
+      g.append(el('path', { d: area(meas), fill: color, 'fill-opacity': active ? 0.35 : 0, stroke: 'none' }));
+      g.append(el('path', { d: sides(meas), fill: 'none', stroke: color, 'stroke-width': 1.5 }));
+      if (c.ext) {
+        const ex = pts.filter((p) => p.u >= meas[meas.length - 1].u - 1e-9);
+        g.append(el('path', { d: area(ex), fill: color, 'fill-opacity': active ? 0.12 : 0, stroke: 'none' }));
+        g.append(el('path', { d: sides(ex), fill: 'none', stroke: color, 'stroke-width': 1.25, 'stroke-dasharray': '3 2' }));
+      }
     }
     g.append(el('text', { x: cx, y: H - 30 + 2, fill: color, 'font-size': fs(10), 'font-weight': 700, 'text-anchor': 'middle' }, SHORT[slug]));
     g.append(el('text', { x: cx, y: H - 18, fill: T.muted, 'font-size': fs(9), 'text-anchor': 'middle' }, m.q));
     if (current === slug) g.append(el('rect', { x: cx - slotW / 2 - 1, y: ext[0], width: slotW + 2, height: ext[1] - ext[0], fill: 'none', stroke: T.water, 'stroke-width': 1.5, rx: 4 }));
     svg.append(g);
   });
-  svg.append(el('text', { x: 4, y: H - 18, fill: T.muted, 'font-size': fs(9) }, 'mAh/g'));
+  // larger text (phone): the unit moves one line down, otherwise it runs into the 3860 of lithium metal
+  svg.append(el('text', { x: 4, y: fs(9) === 9 ? H - 18 : H - 4, fill: T.muted, 'font-size': fs(9) }, 'mAh/g'));
   return svg;
 }
 
@@ -237,12 +281,16 @@ const PHASES = {
   lfp: { empty: 'FePO₄', full: 'LiFePO₄', color: T.cathode },
   lto: { empty: 'Li₄Ti₅O₁₂', full: 'Li₇Ti₅O₁₂', color: T.anode },
 };
-export function drawWeir(container, fill, slug = 'lfp') {
+// population: the weir of a whole electrode (variant C). The reservoir is then the share of particles that have
+// converted, and the states on the plateau are stable, so they are drawn as ordinary water.
+export function drawWeir(container, fill, slug = 'lfp', { population = false } = {}) {
   use(container);
   const ph = PHASES[slug];
   const W = 360;
   const H = 300;
-  const svg = svgRoot(container, W, H, `One ${slug.toUpperCase()} particle as two equal narrow tanks joined by an overflow weir; below the right one a large reservoir for turning ${ph.empty} into ${ph.full}`);
+  const svg = svgRoot(container, W, H, population
+    ? `A ${slug.toUpperCase()} electrode as two equal narrow tanks joined by an overflow weir; the large reservoir below the right one is the share of particles that have turned from ${ph.empty} into ${ph.full}`
+    : `One ${slug.toUpperCase()} particle as two equal narrow tanks joined by an overflow weir; below the right one a large reservoir for turning ${ph.empty} into ${ph.full}`);
   const wN = 30;            // width of both necks
   const hN = 64;            // height of both necks
   const yCrest = 104;       // weir crest = plateau height
@@ -260,16 +308,22 @@ export function drawWeir(container, fill, slug = 'lfp') {
   // 1) left neck
   const l = Math.min(1, fill / WEIR.left);
   water(xL, yLeftBottom - l * hN, wN, l * hN);
-  // 2) reservoir; on the plateau a film runs through the gutter and falls into the reservoir
+  // 2) reservoir; on the plateau a film runs through the gutter and falls into the reservoir. For a single small
+  //    particle these in-between states are unstable (it tips over as a whole), so they are drawn in warning colour,
+  //    dashed; once the particle has converted, the full reservoir is ordinary water again
   const r = fill <= WEIR.left ? 0 : Math.min(1, (fill - WEIR.left) / (WEIR.right - WEIR.left));
-  water(xR0, yResBottom - r * hRes, xR - xR0, r * hRes);
+  const unstable = !population && r > 0 && r < 1;
+  const spill = unstable ? { fill: T.warn, 'fill-opacity': 0.45, stroke: T.warn, 'stroke-width': 2, 'stroke-dasharray': '6 4' } : { fill: T.water, opacity: 0.85 };
+  if (r > 0) svg.append(el('rect', { x: xR0, y: yResBottom - r * hRes, width: xR - xR0, height: r * hRes, ...spill }));
   if (r > 0 && r < 1) {
-    water(xC, yCrest - 2, xR0 - xC + 2, 2);
-    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, fill: T.water, opacity: 0.85 }));
+    const film = unstable ? { fill: T.warn, opacity: 0.6 } : { fill: T.water, opacity: 0.85 };
+    svg.append(el('rect', { x: xC, y: yCrest - 2, width: xR0 - xC + 2, height: 2, ...film }));
+    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, ...film }));
   }
-  // 3) right neck (the gutter is then full too)
+  // 3) right neck; the gutter and the top of the left neck (up to its roof) are then full too
   if (fill > WEIR.right) {
     const t = (fill - WEIR.right) / (1 - WEIR.right);
+    water(xL, yCrest - gut, wN, gut);
     water(xC, yCrest - gut, xR0 - xC, gut);
     water(xR0, yCrest - t * hN, wN, t * hN);
   }
@@ -283,10 +337,11 @@ export function drawWeir(container, fill, slug = 'lfp') {
   svg.append(el('text', { x: xC, y: yCrest - gut - 8, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'middle' }, 'weir crest ↓'));
   svg.append(el('text', { x: xL - 6, y: yCrest + hN / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, ph.empty));
   svg.append(el('text', { x: xN1 + 8, y: yTop + 12, fill: T.muted, 'font-size': fs(10) }, ph.full));
-  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 44, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `reservoir: ${ph.empty} → ${ph.full}`));
+  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 44, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, population ? 'reservoir: converted particles' : `reservoir: ${ph.empty} → ${ph.full}`));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 58, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
   const phase = fill <= WEIR.left ? 'left tank: empty phase takes up lithium'
-    : fill <= WEIR.right ? 'on the plateau: spilling into the reservoir' : 'right tank: full phase gets fuller';
+    : fill <= WEIR.right ? (population ? 'plateau: one particle after another converts' : 'tipping over: a small particle won\'t stay here')
+      : 'right tank: full phase gets fuller';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
   svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
 }
@@ -337,7 +392,7 @@ export function mnShare(v) {
 export function drawCascade(container, fill, mn = 0.59) {
   use(container);
   const W = 360;
-  const svg = svgRoot(container, W, 300, 'One LMFP particle as a cascade: a narrow tank and a weir for manganese with a reservoir behind it, then an ordinary wide tank for iron without a weir');
+  const svg = svgRoot(container, W, 300, 'An LMFP electrode as a cascade: a narrow tank and a weir for manganese with a reservoir behind it, then an ordinary wide tank for iron without a weir');
   const left = 0.03;
   const wN = 30; const hN = 50;
   const yCrest = 152; const yLeftBottom = yCrest + hN;
@@ -376,13 +431,16 @@ export function drawCascade(container, fill, mn = 0.59) {
   svg.append(el('path', { d: `M${xR0} ${yCrest - gut}H${xLw}V${yLeftBottom}H${xC}V${yCrest}H${xR0}`, ...stroke }));
   svg.append(el('path', { d: `M${xR0} ${yCrest - hFe - 14}V${yCrest - gut}M${xR0} ${yCrest}V${yResBottom}H${xR}V${yCrest}H${xR0 + wB}L${xR0 + wT} ${yCrest - hFe}V${yCrest - hFe - 14}`, ...stroke }));
   svg.append(el('path', { d: `M${xC - 4} ${yCrest}h8`, stroke: T.warn, 'stroke-width': 3 }));
-  svg.append(el('text', { x: xR0 - 6, y: yCrest - gut - 8, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'end' }, 'Mn crest, about 4.0 V ↓'));
+  svg.append(el('text', { x: xR0 - 6, y: yCrest - gut - 8, fill: T.warn, 'font-size': fit(10, 'Mn crest, about 4.0 V ↓', xR0 - 10), 'text-anchor': 'end' }, 'Mn crest, about 4.0 V ↓'));
   svg.append(el('text', { x: xLw - 6, y: yCrest + hN / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, 'empty'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 64, fill: T.muted, 'font-size': fs(10) }, 'iron, about 3.5 V:'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 51, fill: T.muted, 'font-size': fs(10) }, 'one phase, no weir'));
-  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `manganese reservoir (${Math.round(mn * 100)} %)`));
+  const resLabel = `manganese reservoir (about ${Math.round(mn * 20) * 5} %)`;
+  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fit(10, resLabel, xR - xR0 - 8), 'text-anchor': 'middle' }, resLabel));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2 + 14, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
-  svg.append(el('text', { x: xR0 + wT + 6, y: yCrest - hFe - 2, fill: T.muted, 'font-size': fs(10) }, '↑ towards the ceiling: full, lower voltage'));
+  const up = '↑ ceiling: full, lower voltage';
+  const room = W - (xR0 + wT + 6) - 4;
+  svg.append(el('text', { x: xR0 + wT + 6, y: yCrest - hFe - 2, fill: T.muted, 'font-size': Math.min(fs(10), Math.floor((room / (up.length * 0.55)) * 10) / 10) }, up));
   const phase = fill <= left ? 'empty phase takes up lithium'
     : fill <= mn ? 'manganese step: spilling into the reservoir' : 'iron step: one phase, the level rises';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
@@ -401,14 +459,16 @@ export function regularSolution(omegaRT = 4.5, U0 = 3.42) {
   return { xs, U, dQdU, U0, spin: [0.5 - d, 0.5 + d] };
 }
 
-export function drawSCurve(container) {
+export function drawSCurve(container, { parts = 'curve dqdv' } = {}) {
   use(container);
   const s = regularSolution();
   const [yMin, yMax] = [3.34, 3.5]; // everything of interest lies between the poles (about 3.38 and 3.46 V)
+  // parts: 'curve' (S-curve against the plateau), 'dqdv' (its dQ/dV) or both, separated by a space
+  const want = new Set(String(parts).split(/[\s,]+/).filter(Boolean));
   const top = document.createElement('div');
   const bottom = document.createElement('div');
-  container.replaceChildren(top, bottom);
-  chart(top, {
+  container.replaceChildren(...[want.has('curve') && top, want.has('dqdv') && bottom].filter(Boolean));
+  if (want.has('curve')) chart(top, {
     label: 'S-shaped potential of a homogeneous LFP particle (regular solution model) and the flat plateau',
     xMax: 1, yMin, yMax, xTitle: 'filling x', yTitle: 'potential vs Li/Li⁺ [V]', height: 220,
     draw(p) {
@@ -417,10 +477,11 @@ export function drawSCurve(container) {
       p.line(s.xs.map((x, i) => [x, s.U[i]]), { stroke: T.cathode });
       // left, above the line: there the curve lies below the plateau, the label does not cross it
       p.label(0.05, s.U0 + 0.006, 'plateau (both phases)', T.water);
-      p.label(0.5, 3.49, 'spinodal region', T.warn, 'middle');
-      p.label(0.04, 3.35, 'evenly filled crystal', T.cathode);
+      p.label(0.5, 3.49, 'unstable (spinodal region)', T.warn, 'middle');
+      p.label(0.04, 3.35, 'one particle, filled evenly', T.cathode);
     },
   });
+  if (!want.has('dqdv')) return;
   // like a datasheet: voltage up, dQ/dV to the right; the two normal branches white, the negative branch in warning colour
   const iA = s.xs.findIndex((x) => x >= s.spin[0]);
   const iB = s.xs.findIndex((x) => x >= s.spin[1]);
@@ -441,4 +502,155 @@ export function drawSCurve(container) {
       p.label(58, uB + 0.006, `pole at ${fmt(uB, 3)} V`, T.cell, 'end');
     },
   });
+}
+
+// One platelet, filled from outside (regular-solution model as in drawSCurve). Lithium goes in evenly at first, along
+// the S-curve, so the whole platelet gets bluer. At the turning point (spinodal) it can't stay even any more: at one face
+// the lithium-rich phase appears, and from there one phase boundary moves through the platelet while the potential stays
+// on the plateau. Once the boundary has reached the far face, the full phase fills evenly. Sketch of the way in only
+// (lithiation); on the way out the same happens from the other side.
+function plateletBinodal(omegaRT = 4.5) {
+  // ln(x/(1-x)) + Omega (1 - 2x) = 0 below x = 1/2 (common tangent of the symmetric free energy at U0)
+  const f = (x) => Math.log(x / (1 - x)) + omegaRT * (1 - 2 * x);
+  let [a, b] = [1e-9, regularSolution(omegaRT).spin[0]];
+  for (let i = 0; i < 80; i += 1) { const m = (a + b) / 2; if (f(m) < 0) a = m; else b = m; }
+  return (a + b) / 2;
+}
+export function plateletState(fill, omegaRT = 4.5, U0 = 3.42) {
+  const kT = 0.025693;
+  const s = regularSolution(omegaRT, U0);
+  const xa = plateletBinodal(omegaRT);
+  const xb = 1 - xa;
+  const xn = s.spin[0]; // as far as an evenly filled platelet can be pushed (the sill)
+  const uEven = (x) => U0 - kT * Math.log(x / (1 - x)) - omegaRT * kT * (1 - 2 * x);
+  const x = Math.min(0.998, Math.max(0.002, fill));
+  if (x <= xn || x >= xb) return { split: false, c: x, u: uEven(x), xa, xb, xn };
+  return { split: true, front: (x - xa) / (xb - xa), ca: xa, cb: xb, u: U0, xa, xb, xn };
+}
+export function drawPlateletCurve(container, fill) {
+  use(container);
+  const s = regularSolution();
+  const st = plateletState(fill);
+  const [yMin, yMax] = [3.34, 3.5];
+  const xs = s.xs;
+  const path = [
+    ...xs.filter((x) => x <= st.xn).map((x) => [x, plateletState(x).u]),
+    [st.xn, s.U0], [st.xb, s.U0],
+    ...xs.filter((x) => x >= st.xb).map((x) => [x, plateletState(x).u]),
+  ];
+  chart(container, {
+    label: 'Potential of one LFP platelet while it fills: along the S-curve up to the turning point, then on the plateau while a phase boundary moves through, then along the S-curve again',
+    xMax: 1, yMin, yMax, xTitle: 'lithium in the platelet', yTitle: 'potential vs Li/Li⁺ [V]', height: 220,
+    draw(p) {
+      p.band(s.spin[0], s.spin[1], T.warnBand);
+      p.line(xs.map((x, i) => [x, s.U[i]]), { stroke: T.muted, 'stroke-dasharray': '4 4', 'stroke-width': 1.5, opacity: 0.8 });
+      p.line(path, { stroke: T.cathode });
+      p.dot(Math.min(0.998, Math.max(0.002, fill)), st.u, T.cell);
+      p.label(0.5, 3.49, 'evenly filled: unstable', T.warn, 'middle');
+      p.label(0.5, s.U0 + 0.008, 'split: on the plateau', T.cathode, 'middle');
+      p.label(0.97, 3.35, 'S-curve (dashed)', T.muted, 'end');
+    },
+  });
+}
+export function drawPlatelet(container, fill, slug = 'lfp') {
+  use(container);
+  const ph = PHASES[slug];
+  const st = plateletState(fill);
+  const W = 360;
+  const H = 150;
+  const svg = svgRoot(container, W, H, `One ${slug.toUpperCase()} platelet: first it takes up lithium evenly and gets bluer as a whole; then the lithium-rich phase appears at one face and a phase boundary moves through it once`);
+  const op = (c) => 0.08 + 0.87 * Math.sqrt(Math.max(0, c)); // brighter (more opaque) blue = more lithium (stretched at low fillings)
+  const [x0, y0, w, h, dx, dy] = [40, 72, 250, 34, 34, -26];
+  const blue = (c, k = 1) => ({ fill: T.water, 'fill-opacity': op(c) * k });
+  const front = (xa, xb, c) => svg.append(el('rect', { x: x0 + xa * w, y: y0, width: (xb - xa) * w, height: h, ...blue(c) }));
+  const top = (xa, xb, c) => svg.append(el('path', { d: `M${x0 + xa * w} ${y0}L${x0 + xa * w + dx} ${y0 + dy}H${x0 + xb * w + dx}L${x0 + xb * w} ${y0}Z`, ...blue(c, 0.8) }));
+  const side = (c) => svg.append(el('path', { d: `M${x0 + w} ${y0}l${dx} ${dy}v${h}l${-dx} ${-dy}Z`, ...blue(c, 0.65) }));
+  if (!st.split) { front(0, 1, st.c); top(0, 1, st.c); side(st.c); }
+  else {
+    front(0, st.front, st.cb); top(0, st.front, st.cb);
+    front(st.front, 1, st.ca); top(st.front, 1, st.ca); side(st.ca);
+    const xf = x0 + st.front * w;
+    svg.append(el('path', { d: `M${xf} ${y0 + h}V${y0}l${dx} ${dy}`, stroke: T.warn, 'stroke-width': 2, fill: 'none' }));
+    svg.append(el('text', { x: xf + dx, y: y0 + dy - 6, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'middle' }, 'phase boundary ↓'));
+    if (st.front > 0.22) svg.append(el('text', { x: x0 + (st.front * w) / 2, y: y0 + h + 16, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, ph.full));
+    if (st.front < 0.78) svg.append(el('text', { x: xf + ((1 - st.front) * w) / 2, y: y0 + h + 16, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, ph.empty));
+  }
+  // outline of the platelet
+  const stroke = { stroke: ph.color, 'stroke-width': 2, fill: 'none', 'stroke-linejoin': 'round' };
+  svg.append(el('path', { d: `M${x0} ${y0}h${w}v${h}h${-w}Z M${x0} ${y0}l${dx} ${dy}h${w}l${-dx} ${-dy} M${x0 + w + dx} ${y0 + dy}v${h}l${-dx} ${-dy}`, ...stroke }));
+  const phase = !st.split && fill <= st.xn ? 'fills evenly, the whole platelet gets bluer'
+    : st.split ? 'split: one boundary moves through' : 'converted, fills evenly again';
+  const head = `${Math.round(fill * 100)} % · ${phase}`;
+  svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
+  svg.append(el('text', { x: W / 2, y: H - 6, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, 'brighter blue = more lithium (sketch, not to scale)'));
+}
+
+// Graphite staging: one particle as a stack of carbon layers, lithium goes in from the left edge between them.
+// Simplified after Rüdorff–Hofmann: first every fourth gap fills (stage 4), then every second (stage 2, LiC12), then
+// every gap (stage 1, LiC6). The first step is drawn as scattered lithium, the two later ones as a front moving in
+// from the edge (two phases side by side). Real graphite also passes through stages 3 and 2L; this is a sketch.
+// The bar below uses the same filling axis as the curve (0 = empty, 1 = LiC6).
+export const STAGES = [
+  { to: 0.25, every: 4, label: 'every 4th', name: 'stage 4' },
+  { to: 0.5, every: 2, label: 'every 2nd', name: 'stage 2 · LiC₁₂' },
+  { to: 1, every: 1, label: 'every gap', name: 'stage 1 · LiC₆' },
+];
+export function drawStaging(container, fill) {
+  use(container);
+  const f = Math.min(1, Math.max(0, fill));
+  const W = 360;
+  const H = 286;
+  const svg = svgRoot(container, W, H, 'One graphite particle as a stack of carbon layers. Lithium goes in from the edge: first into every fourth gap, then every second, then every gap.');
+  const nGap = 12;
+  const nSite = 18;
+  const x0 = 62;
+  const x1 = 344;
+  const yTop = 46;
+  const gap = 13.5;
+  const dx = (x1 - x0) / nSite;
+  // which step fills which gap: 0 = every 4th, 1 = the rest of every 2nd, 2 = the remaining ones
+  const step = (g) => (g % 4 === 0 ? 0 : g % 2 === 0 ? 1 : 2);
+  const from = [0, STAGES[0].to, STAGES[1].to];
+  const active = f >= 0.999 ? -1 : f < STAGES[0].to ? 0 : f < STAGES[1].to ? 1 : 2;
+  const hash = (g, i) => (((g * 37 + i * 61 + 11) * 2654435761) % 1000) / 1000;
+  for (let g = 0; g < nGap; g += 1) {
+    const s = step(g);
+    const y = yTop + gap * (g + 0.5);
+    if (s === active) svg.append(el('rect', { x: x0, y: y - gap / 2, width: x1 - x0, height: gap, fill: T.windowStrong }));
+    const t = Math.min(1, Math.max(0, (f - from[s]) / (STAGES[s].to - from[s])));
+    for (let i = 0; i < nSite; i += 1) {
+      const on = s === 0 && f < STAGES[0].to ? hash(g, i) < t : (i + 0.5) / nSite <= t + 1e-9;
+      if (on) svg.append(el('circle', { cx: x0 + dx * (i + 0.5), cy: y, r: 3.2, fill: T.water }));
+    }
+  }
+  // carbon layers
+  for (let g = 0; g <= nGap; g += 1) {
+    const y = yTop + gap * g;
+    svg.append(el('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: T.anode, 'stroke-width': 2, opacity: 0.85 }));
+  }
+  // lithium comes in from the edge
+  const yMid = yTop + (gap * nGap) / 2;
+  svg.append(el('path', { d: `M${x0 - 40} ${yMid}H${x0 - 8}m-7 -6l7 6l-7 6`, fill: 'none', stroke: T.water, 'stroke-width': 2.5, 'stroke-linejoin': 'round' }));
+  svg.append(el('text', { x: x0 - 28, y: yMid - 12, fill: T.water, 'font-size': fs(11), 'text-anchor': 'middle' }, 'Li⁺'));
+  svg.append(el('text', { x: x1, y: yTop + gap * nGap + 14, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'end' }, 'green: carbon layers'));
+  // bar on the filling axis of the curve: three steps
+  const yb = 246;
+  const hb = 10;
+  const bx = (v) => x0 + v * (x1 - x0);
+  svg.append(el('rect', { x: x0, y: yb, width: bx(f) - x0, height: hb, fill: T.water, opacity: 0.85 }));
+  STAGES.forEach((st, k) => {
+    const a = bx(from[k]);
+    const b = bx(st.to);
+    svg.append(el('rect', { x: a, y: yb, width: b - a, height: hb, fill: 'none', stroke: k === active ? T.cell : T.tank, 'stroke-width': k === active ? 2 : 1.25 }));
+    svg.append(el('text', { x: (a + b) / 2, y: yb + hb + 14, fill: k === active ? T.cell : T.muted, 'font-size': fit(10, st.label, b - a - 2), 'text-anchor': 'middle', 'font-weight': k === active ? 700 : 400 }, st.label));
+  });
+  svg.append(el('text', { x: x0 - 8, y: yb + hb - 1, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'end' }, 'empty'));
+  const near = (v) => Math.abs(f - v) < 0.006;
+  const phase = active === -1 ? 'every gap full: LiC₆'
+    : near(0.25) ? 'every 4th gap full (stage 4)'
+    : near(0.5) ? 'every 2nd gap full: LiC₁₂ (stage 2)'
+    : active === 0 ? 'every 4th gap takes lithium (stage 4)'
+      : active === 1 ? 'every 2nd gap fills from the edge (stage 2)' : 'the last gaps fill from the edge (stage 1)';
+  const head = `${Math.round(f * 100)} % · ${phase}`;
+  svg.append(el('text', { x: 12, y: 22, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
 }
