@@ -431,11 +431,12 @@ export function drawCascade(container, fill, mn = 0.59) {
   svg.append(el('path', { d: `M${xR0} ${yCrest - gut}H${xLw}V${yLeftBottom}H${xC}V${yCrest}H${xR0}`, ...stroke }));
   svg.append(el('path', { d: `M${xR0} ${yCrest - hFe - 14}V${yCrest - gut}M${xR0} ${yCrest}V${yResBottom}H${xR}V${yCrest}H${xR0 + wB}L${xR0 + wT} ${yCrest - hFe}V${yCrest - hFe - 14}`, ...stroke }));
   svg.append(el('path', { d: `M${xC - 4} ${yCrest}h8`, stroke: T.warn, 'stroke-width': 3 }));
-  svg.append(el('text', { x: xR0 - 6, y: yCrest - gut - 8, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'end' }, 'Mn crest, about 4.0 V ↓'));
+  svg.append(el('text', { x: xR0 - 6, y: yCrest - gut - 8, fill: T.warn, 'font-size': fit(10, 'Mn crest, about 4.0 V ↓', xR0 - 10), 'text-anchor': 'end' }, 'Mn crest, about 4.0 V ↓'));
   svg.append(el('text', { x: xLw - 6, y: yCrest + hN / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, 'empty'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 64, fill: T.muted, 'font-size': fs(10) }, 'iron, about 3.5 V:'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 51, fill: T.muted, 'font-size': fs(10) }, 'one phase, no weir'));
-  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `manganese reservoir (about ${Math.round(mn * 20) * 5} %)`));
+  const resLabel = `manganese reservoir (about ${Math.round(mn * 20) * 5} %)`;
+  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fit(10, resLabel, xR - xR0 - 8), 'text-anchor': 'middle' }, resLabel));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2 + 14, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
   const up = '↑ ceiling: full, lower voltage';
   const room = W - (xR0 + wT + 6) - 4;
