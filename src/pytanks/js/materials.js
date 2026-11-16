@@ -277,12 +277,16 @@ const PHASES = {
   lfp: { empty: 'FePO₄', full: 'LiFePO₄', color: T.cathode },
   lto: { empty: 'Li₄Ti₅O₁₂', full: 'Li₇Ti₅O₁₂', color: T.anode },
 };
-export function drawWeir(container, fill, slug = 'lfp') {
+// population: the weir of a whole electrode (variant C). The reservoir is then the share of particles that have
+// converted, and the states on the plateau are stable, so they are drawn as ordinary water.
+export function drawWeir(container, fill, slug = 'lfp', { population = false } = {}) {
   use(container);
   const ph = PHASES[slug];
   const W = 360;
   const H = 300;
-  const svg = svgRoot(container, W, H, `One ${slug.toUpperCase()} particle as two equal narrow tanks joined by an overflow weir; below the right one a large reservoir for turning ${ph.empty} into ${ph.full}`);
+  const svg = svgRoot(container, W, H, population
+    ? `A ${slug.toUpperCase()} electrode as two equal narrow tanks joined by an overflow weir; the large reservoir below the right one is the share of particles that have turned from ${ph.empty} into ${ph.full}`
+    : `One ${slug.toUpperCase()} particle as two equal narrow tanks joined by an overflow weir; below the right one a large reservoir for turning ${ph.empty} into ${ph.full}`);
   const wN = 30;            // width of both necks
   const hN = 64;            // height of both necks
   const yCrest = 104;       // weir crest = plateau height
@@ -304,12 +308,13 @@ export function drawWeir(container, fill, slug = 'lfp') {
   //    particle these in-between states are unstable (it tips over as a whole), so they are drawn in warning colour,
   //    dashed; once the particle has converted, the full reservoir is ordinary water again
   const r = fill <= WEIR.left ? 0 : Math.min(1, (fill - WEIR.left) / (WEIR.right - WEIR.left));
-  const unstable = r > 0 && r < 1;
+  const unstable = !population && r > 0 && r < 1;
   const spill = unstable ? { fill: T.warn, 'fill-opacity': 0.45, stroke: T.warn, 'stroke-width': 2, 'stroke-dasharray': '6 4' } : { fill: T.water, opacity: 0.85 };
   if (r > 0) svg.append(el('rect', { x: xR0, y: yResBottom - r * hRes, width: xR - xR0, height: r * hRes, ...spill }));
-  if (unstable) {
-    svg.append(el('rect', { x: xC, y: yCrest - 2, width: xR0 - xC + 2, height: 2, fill: T.warn, opacity: 0.6 }));
-    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, fill: T.warn, opacity: 0.6 }));
+  if (r > 0 && r < 1) {
+    const film = unstable ? { fill: T.warn, opacity: 0.6 } : { fill: T.water, opacity: 0.85 };
+    svg.append(el('rect', { x: xC, y: yCrest - 2, width: xR0 - xC + 2, height: 2, ...film }));
+    svg.append(el('path', { d: `M${xR0} ${yCrest - 2}Q${xR0 + 7} ${yCrest} ${xR0 + 6} ${yResBottom - r * hRes}H${xR0}Z`, ...film }));
   }
   // 3) right neck; the gutter and the top of the left neck (up to its roof) are then full too
   if (fill > WEIR.right) {
@@ -328,10 +333,11 @@ export function drawWeir(container, fill, slug = 'lfp') {
   svg.append(el('text', { x: xC, y: yCrest - gut - 8, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'middle' }, 'weir crest ↓'));
   svg.append(el('text', { x: xL - 6, y: yCrest + hN / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, ph.empty));
   svg.append(el('text', { x: xN1 + 8, y: yTop + 12, fill: T.muted, 'font-size': fs(10) }, ph.full));
-  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 44, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `reservoir: ${ph.empty} → ${ph.full}`));
+  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 44, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, population ? 'reservoir: converted particles' : `reservoir: ${ph.empty} → ${ph.full}`));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + 58, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
   const phase = fill <= WEIR.left ? 'left tank: empty phase takes up lithium'
-    : fill <= WEIR.right ? 'tipping over: a small particle won\'t stay here' : 'right tank: full phase gets fuller';
+    : fill <= WEIR.right ? (population ? 'plateau: one particle after another converts' : 'tipping over: a small particle won\'t stay here')
+      : 'right tank: full phase gets fuller';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
   svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
 }
@@ -489,6 +495,87 @@ export function drawSCurve(container, { parts = 'curve dqdv' } = {}) {
       p.label(58, uB + 0.006, `pole at ${fmt(uB, 3)} V`, T.cell, 'end');
     },
   });
+}
+
+// One platelet, filled from outside (regular-solution model as in drawSCurve). Lithium goes in evenly at first, along
+// the S-curve, so the whole platelet gets bluer. At the turning point (spinodal) it can't stay even any more: at one face
+// the lithium-rich phase appears, and from there one phase boundary moves through the platelet while the potential stays
+// on the plateau. Once the boundary has reached the far face, the full phase fills evenly. Sketch of the way in only
+// (lithiation); on the way out the same happens from the other side.
+function plateletBinodal(omegaRT = 4.5) {
+  // ln(x/(1-x)) + Omega (1 - 2x) = 0 below x = 1/2 (common tangent of the symmetric free energy at U0)
+  const f = (x) => Math.log(x / (1 - x)) + omegaRT * (1 - 2 * x);
+  let [a, b] = [1e-9, regularSolution(omegaRT).spin[0]];
+  for (let i = 0; i < 80; i += 1) { const m = (a + b) / 2; if (f(m) < 0) a = m; else b = m; }
+  return (a + b) / 2;
+}
+export function plateletState(fill, omegaRT = 4.5, U0 = 3.42) {
+  const kT = 0.025693;
+  const s = regularSolution(omegaRT, U0);
+  const xa = plateletBinodal(omegaRT);
+  const xb = 1 - xa;
+  const xn = s.spin[0]; // as far as an evenly filled platelet can be pushed (the sill)
+  const uEven = (x) => U0 - kT * Math.log(x / (1 - x)) - omegaRT * kT * (1 - 2 * x);
+  const x = Math.min(0.998, Math.max(0.002, fill));
+  if (x <= xn || x >= xb) return { split: false, c: x, u: uEven(x), xa, xb, xn };
+  return { split: true, front: (x - xa) / (xb - xa), ca: xa, cb: xb, u: U0, xa, xb, xn };
+}
+export function drawPlateletCurve(container, fill) {
+  use(container);
+  const s = regularSolution();
+  const st = plateletState(fill);
+  const [yMin, yMax] = [3.34, 3.5];
+  const xs = s.xs;
+  const path = [
+    ...xs.filter((x) => x <= st.xn).map((x) => [x, plateletState(x).u]),
+    [st.xn, s.U0], [st.xb, s.U0],
+    ...xs.filter((x) => x >= st.xb).map((x) => [x, plateletState(x).u]),
+  ];
+  chart(container, {
+    label: 'Potential of one LFP platelet while it fills: along the S-curve up to the turning point, then on the plateau while a phase boundary moves through, then along the S-curve again',
+    xMax: 1, yMin, yMax, xTitle: 'lithium in the platelet', yTitle: 'potential vs Li/Li⁺ [V]', height: 220,
+    draw(p) {
+      p.band(s.spin[0], s.spin[1], T.warnBand);
+      p.line(xs.map((x, i) => [x, s.U[i]]), { stroke: T.muted, 'stroke-dasharray': '4 4', 'stroke-width': 1.5, opacity: 0.8 });
+      p.line(path, { stroke: T.cathode });
+      p.dot(Math.min(0.998, Math.max(0.002, fill)), st.u, T.cell);
+      p.label(0.5, 3.49, 'evenly filled: unstable', T.warn, 'middle');
+      p.label(0.5, s.U0 + 0.008, 'split: on the plateau', T.cathode, 'middle');
+      p.label(0.97, 3.35, 'S-curve (dashed)', T.muted, 'end');
+    },
+  });
+}
+export function drawPlatelet(container, fill, slug = 'lfp') {
+  use(container);
+  const ph = PHASES[slug];
+  const st = plateletState(fill);
+  const W = 360;
+  const H = 150;
+  const svg = svgRoot(container, W, H, `One ${slug.toUpperCase()} platelet: first it takes up lithium evenly and gets bluer as a whole; then the lithium-rich phase appears at one face and a phase boundary moves through it once`);
+  const op = (c) => 0.08 + 0.87 * Math.sqrt(Math.max(0, c)); // deeper blue = more lithium (stretched at low fillings)
+  const [x0, y0, w, h, dx, dy] = [40, 72, 250, 34, 34, -26];
+  const blue = (c, k = 1) => ({ fill: T.water, 'fill-opacity': op(c) * k });
+  const front = (xa, xb, c) => svg.append(el('rect', { x: x0 + xa * w, y: y0, width: (xb - xa) * w, height: h, ...blue(c) }));
+  const top = (xa, xb, c) => svg.append(el('path', { d: `M${x0 + xa * w} ${y0}L${x0 + xa * w + dx} ${y0 + dy}H${x0 + xb * w + dx}L${x0 + xb * w} ${y0}Z`, ...blue(c, 0.8) }));
+  const side = (c) => svg.append(el('path', { d: `M${x0 + w} ${y0}l${dx} ${dy}v${h}l${-dx} ${-dy}Z`, ...blue(c, 0.65) }));
+  if (!st.split) { front(0, 1, st.c); top(0, 1, st.c); side(st.c); }
+  else {
+    front(0, st.front, st.cb); top(0, st.front, st.cb);
+    front(st.front, 1, st.ca); top(st.front, 1, st.ca); side(st.ca);
+    const xf = x0 + st.front * w;
+    svg.append(el('path', { d: `M${xf} ${y0 + h}V${y0}l${dx} ${dy}`, stroke: T.warn, 'stroke-width': 2, fill: 'none' }));
+    svg.append(el('text', { x: xf + dx, y: y0 + dy - 6, fill: T.warn, 'font-size': fs(10), 'text-anchor': 'middle' }, 'phase boundary ↓'));
+    if (st.front > 0.22) svg.append(el('text', { x: x0 + (st.front * w) / 2, y: y0 + h + 16, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, ph.full));
+    if (st.front < 0.78) svg.append(el('text', { x: xf + ((1 - st.front) * w) / 2, y: y0 + h + 16, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, ph.empty));
+  }
+  // outline of the platelet
+  const stroke = { stroke: ph.color, 'stroke-width': 2, fill: 'none', 'stroke-linejoin': 'round' };
+  svg.append(el('path', { d: `M${x0} ${y0}h${w}v${h}h${-w}Z M${x0} ${y0}l${dx} ${dy}h${w}l${-dx} ${-dy} M${x0 + w + dx} ${y0 + dy}v${h}l${-dx} ${-dy}`, ...stroke }));
+  const phase = !st.split && fill <= st.xn ? 'fills evenly, the whole platelet gets bluer'
+    : st.split ? 'split: one boundary moves through' : 'converted, fills evenly again';
+  const head = `${Math.round(fill * 100)} % · ${phase}`;
+  svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
+  svg.append(el('text', { x: W / 2, y: H - 6, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, 'deeper blue = more lithium (sketch, not to scale)'));
 }
 
 // Graphite staging: one particle as a stack of carbon layers, lithium goes in from the left edge between them.
