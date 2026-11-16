@@ -88,7 +88,7 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
     svg.append(el('line', { x1: 40, x2: W - 8, y1: y(t), y2: y(t), stroke: T.grid }));
     // 0 V is already written at the ceiling bar (and would be hidden below it)
     if (ceiling && t === 0) continue;
-    svg.append(el('text', { x: 34, y: y(t), fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, `${t} V`));
+    svg.append(el('text', { x: 34, y: y(t), fill: T.muted, 'font-size': fit(10, `${t} V`, 32), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, `${t} V`));
   }
   const cap = 230;
   const cx = 200;
@@ -134,7 +134,8 @@ export function drawTank(container, { variants, fill, color, uTop, uBot, ceiling
 // All NMC/NCA curves on one axis: full end fixed at the theoretical capacity, only the start and the shape change
 const NI_COLORS = ['#fde3a7', '#f8c471', '#f5b041', '#f39c12', '#e67e22', '#ff8a80'];
 export function drawNmcAll(container, m, current) {
-  use(container);
+  const { profile: prof } = use(container);
+  const plotH = Math.round(280 * prof.chart);
   chart(container, {
     label: 'All NMC and NCA curves on one axis: the full end is fixed at the theoretical capacity, only the start moves',
     xMin: 0, xMax: m.qTheo, yMin: 2.9, yMax: 4.7, xTitle: 'lithium in the material [mAh/g]', yTitle: 'potential vs Li/Li⁺ [V]', height: 280,
@@ -149,8 +150,10 @@ export function drawNmcAll(container, m, current) {
       };
       m.variants.forEach((v, i) => { if (i !== current) line(v, { stroke: NI_COLORS[i], opacity: 0.8, 'stroke-width': 1.75 }); });
       line(m.variants[current], { stroke: NI_COLORS[current], 'stroke-width': 3 });
-      // Legend bottom left (no curve runs there)
-      m.variants.forEach((vv, i) => p.label(8, 3.0 + (m.variants.length - 1 - i) * 0.075, vv.label, NI_COLORS[i], 'start'));
+      // Legend bottom left (no curve runs there): two columns of three, row height from the font size
+      const rowV = (fs(11) * 1.3 * (4.7 - 2.9)) / (plotH - 52);
+      const rows = Math.ceil(m.variants.length / 2);
+      m.variants.forEach((vv, i) => p.label(8 + Math.floor(i / rows) * 72, 3.02 + (rows - 1 - (i % rows)) * rowV, vv.label, NI_COLORS[i], 'start'));
       p.label(m.qTheo - 8, 4.62, 'dashed: extrapolated', T.muted, 'end');
     },
   });
@@ -227,7 +230,8 @@ export function drawShelf(container, data, current, nav) {
     if (current === slug) g.append(el('rect', { x: cx - slotW / 2 - 1, y: ext[0], width: slotW + 2, height: ext[1] - ext[0], fill: 'none', stroke: T.water, 'stroke-width': 1.5, rx: 4 }));
     svg.append(g);
   });
-  svg.append(el('text', { x: 4, y: H - 18, fill: T.muted, 'font-size': fs(9) }, 'mAh/g'));
+  // larger text (phone): the unit moves one line down, otherwise it runs into the 3860 of lithium metal
+  svg.append(el('text', { x: 4, y: fs(9) === 9 ? H - 18 : H - 4, fill: T.muted, 'font-size': fs(9) }, 'mAh/g'));
   return svg;
 }
 
@@ -388,7 +392,7 @@ export function mnShare(v) {
 export function drawCascade(container, fill, mn = 0.59) {
   use(container);
   const W = 360;
-  const svg = svgRoot(container, W, 300, 'One LMFP particle as a cascade: a narrow tank and a weir for manganese with a reservoir behind it, then an ordinary wide tank for iron without a weir');
+  const svg = svgRoot(container, W, 300, 'An LMFP electrode as a cascade: a narrow tank and a weir for manganese with a reservoir behind it, then an ordinary wide tank for iron without a weir');
   const left = 0.03;
   const wN = 30; const hN = 50;
   const yCrest = 152; const yLeftBottom = yCrest + hN;
@@ -431,9 +435,11 @@ export function drawCascade(container, fill, mn = 0.59) {
   svg.append(el('text', { x: xLw - 6, y: yCrest + hN / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end' }, 'empty'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 64, fill: T.muted, 'font-size': fs(10) }, 'iron, about 3.5 V:'));
   svg.append(el('text', { x: xR0 + wAt(48) + 12, y: yCrest - 51, fill: T.muted, 'font-size': fs(10) }, 'one phase, no weir'));
-  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `manganese reservoir (${Math.round(mn * 100)} %)`));
+  svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2, fill: T.muted, 'font-size': fs(10), 'text-anchor': 'middle' }, `manganese reservoir (about ${Math.round(mn * 20) * 5} %)`));
   svg.append(el('text', { x: (xR0 + xR) / 2, y: yCrest + hRes / 2 + 14, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, '(its depth is not a voltage)'));
-  svg.append(el('text', { x: xR0 + wT + 6, y: yCrest - hFe - 2, fill: T.muted, 'font-size': fs(10) }, '↑ towards the ceiling: full, lower voltage'));
+  const up = '↑ ceiling: full, lower voltage';
+  const room = W - (xR0 + wT + 6) - 4;
+  svg.append(el('text', { x: xR0 + wT + 6, y: yCrest - hFe - 2, fill: T.muted, 'font-size': Math.min(fs(10), Math.floor((room / (up.length * 0.55)) * 10) / 10) }, up));
   const phase = fill <= left ? 'empty phase takes up lithium'
     : fill <= mn ? 'manganese step: spilling into the reservoir' : 'iron step: one phase, the level rises';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
@@ -552,7 +558,7 @@ export function drawPlatelet(container, fill, slug = 'lfp') {
   const W = 360;
   const H = 150;
   const svg = svgRoot(container, W, H, `One ${slug.toUpperCase()} platelet: first it takes up lithium evenly and gets bluer as a whole; then the lithium-rich phase appears at one face and a phase boundary moves through it once`);
-  const op = (c) => 0.08 + 0.87 * Math.sqrt(Math.max(0, c)); // deeper blue = more lithium (stretched at low fillings)
+  const op = (c) => 0.08 + 0.87 * Math.sqrt(Math.max(0, c)); // brighter (more opaque) blue = more lithium (stretched at low fillings)
   const [x0, y0, w, h, dx, dy] = [40, 72, 250, 34, 34, -26];
   const blue = (c, k = 1) => ({ fill: T.water, 'fill-opacity': op(c) * k });
   const front = (xa, xb, c) => svg.append(el('rect', { x: x0 + xa * w, y: y0, width: (xb - xa) * w, height: h, ...blue(c) }));
@@ -575,7 +581,7 @@ export function drawPlatelet(container, fill, slug = 'lfp') {
     : st.split ? 'split: one boundary moves through' : 'converted, fills evenly again';
   const head = `${Math.round(fill * 100)} % · ${phase}`;
   svg.append(el('text', { x: 12, y: 20, fill: T.cell, 'font-size': fit(12, head, W - 24, true), 'font-weight': 700 }, head));
-  svg.append(el('text', { x: W / 2, y: H - 6, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, 'deeper blue = more lithium (sketch, not to scale)'));
+  svg.append(el('text', { x: W / 2, y: H - 6, fill: T.muted, 'font-size': fs(9.5), 'text-anchor': 'middle' }, 'brighter blue = more lithium (sketch, not to scale)'));
 }
 
 // Graphite staging: one particle as a stack of carbon layers, lithium goes in from the left edge between them.

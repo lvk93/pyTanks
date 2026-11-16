@@ -4,6 +4,8 @@ Versions follow [semantic versioning](https://semver.org/). Before 1.0 the inter
 
 ## 0.5.0 (2026-11)
 
+- Phone and paper sizes: chart margins make room for wide y tick labels ("1.75", "-400") next to the axis title; tank tick labels shrink to fit; NMC/NCA legend in two columns with a row height from the font; shelf unit "mAh/g" one line lower; LMFP cascade label shortened to fit ("↑ ceiling: full, lower voltage"), manganese reservoir rounded ("about 60 %"), described as an electrode.
+- `drawPlatelet()`: legend "brighter blue = more lithium" (on the dark background the full phase is the brighter one).
 - `shapes.js`: free energy of the regular solution, `gRegular()` and `drawInteractionFreeEnergy()` (double well with the common tangent above 2 kT).
 - Tank-shape columns without the labels "towards the ceiling (more lithium)" and "wider ↔".
 - `drawShapeCompare()` takes an optional voltage window (`{ range: [uMin, uMax] }`, default ±0.6 V).
