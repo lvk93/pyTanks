@@ -113,11 +113,14 @@ export function chart(container, { label, xMin = 0, xMax, yMin, yMax, xTitle, yT
   use(container);
   const height = active.profile.chart === 1 ? h : Math.round(h * active.profile.chart);
   const W = 360;
-  const m = { l: 44, r: 12, t: 12, b: 40 };
+  const yTicks = niceTicks(yMin, yMax);
+  // Larger text (compact, paper): make room so that wide tick labels ("1.75", "-400") stay clear of the y title
+  const tickW = Math.max(...yTicks.map((t) => String(t).length)) * 0.55 * fs(10);
+  const m = { l: active.profile.font === 1 ? 44 : Math.max(44, Math.ceil(26 + tickW)), r: 12, t: 12, b: 40 };
   const svg = svgRoot(container, W, height, label);
   const px = (x) => m.l + ((x - xMin) / (xMax - xMin)) * (W - m.l - m.r);
   const py = (v) => height - m.b - ((v - yMin) / (yMax - yMin)) * (height - m.t - m.b);
-  for (const t of niceTicks(yMin, yMax)) {
+  for (const t of yTicks) {
     svg.append(el('line', { x1: m.l, x2: W - m.r, y1: py(t), y2: py(t), stroke: T.grid }));
     svg.append(el('text', { x: m.l - 6, y: py(t), fill: T.muted, 'font-size': fs(10), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, t));
   }

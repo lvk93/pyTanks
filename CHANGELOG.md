@@ -2,6 +2,18 @@
 
 Versions follow [semantic versioning](https://semver.org/). Before 1.0 the interface can still change between minor versions.
 
+## 0.5.0 (2026-11-24)
+
+- Phone and paper sizes: chart margins make room for wide y tick labels ("1.75", "-400") next to the axis title; tank tick labels shrink to fit; NMC/NCA legend in two columns with a row height from the font; shelf unit "mAh/g" one line lower; LMFP cascade label shortened to fit ("↑ ceiling: full, lower voltage"), manganese reservoir rounded ("about 60 %"), described as an electrode.
+- `drawPlatelet()`: legend "brighter blue = more lithium" (on the dark background the full phase is the brighter one).
+- `shapes.js`: free energy of the regular solution, `gRegular()` and `drawInteractionFreeEnergy()` (double well with the common tangent above 2 kT).
+- Tank-shape columns without the labels "towards the ceiling (more lithium)" and "wider ↔".
+- `drawShapeCompare()` takes an optional voltage window (`{ range: [uMin, uMax] }`, default ±0.6 V).
+- `materials.js`: one LFP platelet, `drawPlatelet()` and `drawPlateletCurve()` with `plateletState()` (fills evenly along the S-curve, then one phase boundary from one face through the platelet on the plateau); `drawWeir(…, { population: true })` draws the weir of a whole electrode, the reservoir is the share of converted particles (no warning colour).
+- `materials.js`: graphite staging drawing `drawStaging()` (carbon layers; every 4th, every 2nd, every gap filled).
+- `drawWeir()`: the in-between states on the plateau (water spilling over, reservoir partly full) are drawn dashed in the warning colour, because a small particle does not stay there; once converted, the left neck is full up to its roof.
+- `drawSCurve(container, { parts })`: draw only the S-curve (`'curve'`), only its dQ/dV (`'dqdv'`) or both (default); labels "unstable (spinodal region)" and "one particle, filled evenly".
+
 ## 0.4.0 (2026-11)
 
 - **Breaking:** the tanks with a constant cross-section are called *linear*, not *ideal* ("ideal" means the ideal solution in thermodynamics, see `shapes.js`): `model/idealCell.js` → `model/linearCell.js`, `idealCell()` → `linearCell()`, `IDEAL_ANODE/CATHODE/SILICON/GRAPHITE` → `LINEAR_…`. No aliases for the old names.

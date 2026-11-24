@@ -124,7 +124,7 @@ test('fit keeps long labels inside their room, never below the wide size', () =>
   assert.equal(fit(12, 'x'.repeat(200), 50, true), 12);
 });
 
-const { binodal, span90, uRegular, wRegular, KT, drawTankShapes, drawShapeCompare, drawInteractionCurve, drawInteractionTank } = await import('../../src/pytanks/js/index.js');
+const { binodal, span90, uRegular, wRegular, gRegular, KT, drawTankShapes, drawShapeCompare, drawInteractionCurve, drawInteractionTank, drawInteractionFreeEnergy } = await import('../../src/pytanks/js/index.js');
 
 test('shapes: ideal solid solution holds 90 % of its lithium within 2 kT ln 19 (about 151 mV)', () => {
   assert.ok(Math.abs(span90(0) - 2 * KT * Math.log(19)) < 1e-9);
@@ -144,8 +144,23 @@ test('shapes: repulsion stretches the tank, attraction squeezes it, above 2 kT t
   assert.ok(Math.abs(uRegular(xb, 4.5)) < 1e-9);
 });
 
+test('shapes: free energy is the integral of the potential, double well only above 2 kT', () => {
+  // mu = dg/dx in kT, and U - U0 = -kT mu
+  for (const [x, om] of [[0.3, 0], [0.2, 3], [0.7, -4]]) {
+    const h = 1e-6;
+    const dg = (gRegular(x + h, om) - gRegular(x - h, om)) / (2 * h);
+    assert.ok(Math.abs(-KT * dg - uRegular(x, om)) < 1e-6);
+  }
+  // curvature at half full: 4 - 2 omega (in kT) -> a hump in the middle only for omega > 2
+  const curv = (om) => (gRegular(0.5 + 1e-3, om) - 2 * gRegular(0.5, om) + gRegular(0.5 - 1e-3, om)) / 1e-6;
+  assert.ok(curv(1.9) > 0 && curv(2.1) < 0);
+  // the binodal points are the two minima
+  const xb = binodal(3);
+  assert.ok(gRegular(xb, 3) < gRegular(xb - 0.01, 3) && gRegular(xb, 3) < gRegular(xb + 0.01, 3));
+});
+
 test('shapes: all figures draw', () => {
-  for (const draw of [(b) => drawTankShapes(b), (b) => drawInteractionCurve(b, 3), (b) => drawInteractionTank(b, 3), (b) => drawInteractionTank(b, -5),
+  for (const draw of [(b) => drawInteractionFreeEnergy(b, 0), (b) => drawInteractionFreeEnergy(b, 3), (b) => drawInteractionFreeEnergy(b, -10), (b) => drawTankShapes(b), (b) => drawInteractionCurve(b, 3), (b) => drawInteractionTank(b, 3), (b) => drawInteractionTank(b, -5),
     (b) => drawShapeCompare(b, [{ name: 'test', color: '#fff', x: [0, 0.5, 1], u: [0.5, 0.2, 0.1] }])]) {
     const box = new Node('div');
     draw(box);

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytanks"
-version = "0.4.0"
+version = "0.5.0"
 description = "Lithium-ion cells drawn as tanks: the chargetanks.com picture language for PyBaMM."
 readme = "README.md"
 license = "BSD-3-Clause"
