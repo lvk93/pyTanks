@@ -2,7 +2,7 @@
 
 Versions follow [semantic versioning](https://semver.org/). Before 1.0 the interface can still change between minor versions.
 
-## 0.5.0 (2026-11)
+## 0.5.0 (2026-11-24)
 
 - Phone and paper sizes: chart margins make room for wide y tick labels ("1.75", "-400") next to the axis title; tank tick labels shrink to fit; NMC/NCA legend in two columns with a row height from the font; shelf unit "mAh/g" one line lower; LMFP cascade label shortened to fit ("↑ ceiling: full, lower voltage"), manganese reservoir rounded ("about 60 %"), described as an electrode.
 - `drawPlatelet()`: legend "brighter blue = more lithium" (on the dark background the full phase is the brighter one).
